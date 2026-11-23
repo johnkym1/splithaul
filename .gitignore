@@ -1,0 +1,37 @@
+# Local game files, save data and generated catalogs
+/game_data/
+/catalogs/
+/profiles/
+/profiles_ets2/
+/research/
+/backups/
+/confirmed_deliveries/
+/tools/
+/dist/
+/publish/
+/_ref/
+/app_options.json
+/ats_dispatch.json
+/ets2_dispatch.json
+/dispatch.json
+/dispatch_single.json
+/company_catalog.json
+/city_coordinates.json
+/job_history.csv
+/job_history.json
+
+# Build outputs and local editor files
+**/build/
+*.exe
+*.dll
+*.obj
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.log
+*.tmp
+.vs/
+.vscode/
+__pycache__/
+*.pyc

@@ -1,0 +1,65 @@
+DISPATCH COMPANION - Made by Grumpyman
+
+This is a test installer for the Windows 64-bit development build.
+Single-player ATS and ETS2, a single owned trailer, and a compatible game build
+are required. Multiple means a two-stop delivery plan in this version.
+
+INSTALLATION
+Close Dispatch Companion and both games normally first.
+Choose the app folder. ATS and ETS2 telemetry installation are both checked by
+default. Uncheck any game you do not want to install telemetry for, and browse
+to each selected game's main Steam folder. Unsupported executable builds are
+rejected before any game DLL is replaced. Existing GT_Telemetry.dll files are
+backed up. Other plugins, game profiles and saves are not modified.
+
+SETTINGS AND HISTORY
+Each Windows user keeps their own data in:
+  %LOCALAPPDATA%\Grumpyman\DispatchCompanion
+Game profiles are separated into profiles and profiles_ets2 subfolders.
+An update refreshes packaged catalogs while preserving settings and histories.
+Your existing development-folder history is not automatically imported.
+
+FIRST RUN
+Open Dispatch Companion from the Start menu once to register Shift+F9.
+Then start ATS or ETS2. When just one game is running, the app selects that
+game automatically. If it switches from the other game, it starts in single
+mode; choose multiple in Options when you want a two-stop plan. Attach a
+single owned trailer and enter Drive. Dispatch while stopped.
+Keep the companion open during a two-stop delivery plan.
+Shift+F9 opens or focuses the companion. Do not use sdk reload for normal use.
+Cancellation requires a stopped truck and the game pause menu.
+After delivery, review the result and acknowledge completion.
+History can be exported with Export CSV and the Save As dialog.
+
+HOW TO USE IT IN GAME - SHIFT + F9
+1. In the driver's seat, stop the truck. Hold SHIFT and tap F9 to open or
+   bring Dispatch Companion to the front. F9 alone is not the shortcut.
+2. If the app does not open, start it once from the Windows Start menu, then
+   return to the game and try SHIFT + F9 again.
+3. In Options, check the game and choose Single or Multiple. The sole running
+   game is detected automatically. Multiple means two delivery stops.
+4. Choose pickup, cargo and delivery company in the app, then dispatch while
+   stopped. Return to the game and follow the route to the green pickup flag.
+5. For two stops, deliver the first load normally. Keep the app open; the
+   remaining cargo is assigned to the second stop automatically. Finish the
+   second delivery, review the result and acknowledge completion.
+No SDK reload is needed between deliveries. Use History to view or export jobs.
+
+UPDATES, ROLLBACK AND UNINSTALL
+Close both games and the app before an update or uninstall.
+Re-run Setup to update the app. Existing app versions are saved in app-backups;
+previous game DLLs are saved in plugin-backups inside the installed app folder.
+For a complete app rollback, use the previous matching installer with games closed.
+On uninstall, the original game DLL is restored only if the current file still
+matches the DLL installed by this installer. A DLL changed by another tool is
+preserved. Saved user data and rollback backups remain on disk.
+
+SUPPORT AND DONATIONS
+GitHub: https://github.com/johnkym1
+Sponsors: https://github.com/sponsors/johnkym1
+Donors choose their own amount. The app's donation button remains disabled
+until the public Sponsors page has been approved and verified.
+
+This build is not digitally signed. Signing, antivirus acceptance and a second-PC
+installation pilot remain release checks; this file is not a public-release sign-off.
+Dispatch Companion is an independent project and is not endorsed by SCS Software.
