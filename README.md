@@ -1,5 +1,12 @@
 # Dispatch Companion
 
+## Download the Windows installer
+
+**[Download Dispatch Companion 0.2.8 Setup (.exe)](https://github.com/johnkym1/dispatch-companion/releases/download/v0.2.8/DispatchCompanion-Setup-0.2.8-win64.exe)**
+
+This is the test installer. The green **Code** button downloads the source
+files. You can also [view the release and its checksum](https://github.com/johnkym1/dispatch-companion/releases/tag/v0.2.8).
+
 Dispatch Companion is a Windows tool by Grumpyman for single-player **American
 Truck Simulator** and **Euro Truck Simulator 2**. With one owned trailer, it
 can dispatch a compatible single job or a two-stop plan. A two-stop plan starts
@@ -14,8 +21,8 @@ This project is independent and is not endorsed by SCS Software.
 
 ## How to use it in game — SHIFT + F9
 
-1. Download the `DispatchCompanion-Setup-0.2.8-win64.exe` asset from the latest
-   pre-release. Close ATS, ETS2 and Dispatch Companion before running Setup.
+1. Download the [Windows installer](https://github.com/johnkym1/dispatch-companion/releases/download/v0.2.8/DispatchCompanion-Setup-0.2.8-win64.exe).
+   Close ATS, ETS2 and Dispatch Companion before running Setup.
    ATS and ETS2 telemetry are checked by default; uncheck a game you do not use.
 2. At the end of Setup, open Dispatch Companion once. This registers the
    installed app for the in-game shortcut.
