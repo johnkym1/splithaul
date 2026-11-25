@@ -1,16 +1,23 @@
 DISPATCH COMPANION - Made by Grumpyman
 
 This is a test installer for the Windows 64-bit development build.
-Single-player ATS and ETS2, a single owned trailer, and a compatible game build
-are required. Multiple means a two-stop delivery plan in this version.
+Single-player ATS or ETS2, an attached owned combination, and a compatible game
+build are required. ATS allows 1-3 trailers; ETS2 allows 1-2. Recognised SCS
+converter dollies are excluded. Unknown components count as trailers. Multiple means a two-stop delivery plan in this version.
 
 INSTALLATION
 Close Dispatch Companion and both games normally first.
-Choose the app folder. ATS and ETS2 telemetry installation are both checked by
-default. Uncheck any game you do not want to install telemetry for, and browse
-to each selected game's main Steam folder. Unsupported executable builds are
+Choose the app folder. ATS and ETS2 telemetry and trailer-mod installation are
+checked by default. Uncheck the tasks for any game you do not use. For telemetry,
+browse to each selected game's main Steam folder. Unsupported executable builds are
 rejected before any game DLL is replaced. Existing GT_Telemetry.dll files are
 backed up. Other plugins, game profiles and saves are not modified.
+For trailer mods, select each game's data folder in Documents (containing
+config.cfg), or its custom -homedir. Setup installs into the mod subfolder.
+The same mod filenames and Mod Manager names are retained on every update.
+After installing, enable GT Multi-Trailer Combinations in each chosen profile's
+Mod Manager. Existing active entries can stay enabled. See TrailerMods.txt or
+the Start menu's Trailer mod guide for combinations, versions and DLC needs.
 
 SETTINGS AND HISTORY
 Each Windows user keeps their own data in:
@@ -23,8 +30,8 @@ FIRST RUN
 Open Dispatch Companion from the Start menu once to register Shift+F9.
 Then start ATS or ETS2. When just one game is running, the app selects that
 game automatically. If it switches from the other game, it starts in single
-mode; choose multiple in Options when you want a two-stop plan. Attach a
-single owned trailer and enter Drive. Dispatch while stopped.
+mode; choose multiple in Options when you want a two-stop plan. Attach your
+owned combination and enter Drive. Dispatch while stopped.
 Keep the companion open during a two-stop delivery plan.
 Shift+F9 opens or focuses the companion. Do not use sdk reload for normal use.
 Cancellation requires a stopped truck and the game pause menu.
@@ -53,6 +60,16 @@ For a complete app rollback, use the previous matching installer with games clos
 On uninstall, the original game DLL is restored only if the current file still
 matches the DLL installed by this installer. A DLL changed by another tool is
 preserved. Saved user data and rollback backups remain on disk.
+Installed trailer mods are also preserved on uninstall because purchased
+trailers can depend on them. Previous mods are backed up outside the active
+mod folder, in <game data folder>\mod-backups\DispatchCompanion.
+
+UPDATES
+In Options, press Check for updates. This includes published test releases.
+If a newer version is available, the app offers to open its GitHub release page.
+Download the installer, then close Dispatch Companion and both games normally
+before running Setup. Existing app profiles, settings and history are retained.
+Update checks are manual; nothing is downloaded or installed automatically.
 
 SUPPORT AND DONATIONS
 GitHub: https://github.com/johnkym1

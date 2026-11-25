@@ -21,5 +21,9 @@ if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /DGT_TARGET_ETS2 /EHsc /utf-8 /W4 /WX /O2 /MT /I vendor\scs_sdk_1_16\include /external:I ..\dispatch_cpp\vendor /external:W0 cancel_integration_test.cpp /Fo:build\ets2\cancel_test.obj /Fe:build\ets2\cancel_test.exe /link bcrypt.lib user32.lib shell32.lib ole32.lib /INCREMENTAL:NO
 if errorlevel 1 exit /b 1
 build\ets2\cancel_test.exe
+if errorlevel 1 exit /b 1
+cl /nologo /std:c++17 /DGT_TARGET_ETS2 /EHsc /utf-8 /W4 /WX /O2 /MT /I vendor\scs_sdk_1_16\include /external:I ..\dispatch_cpp\vendor /external:W0 trailer_combination_test.cpp /Fo:build\ets2\trailer_test.obj /Fe:build\ets2\trailer_test.exe /link bcrypt.lib user32.lib shell32.lib ole32.lib /INCREMENTAL:NO
+if errorlevel 1 exit /b 1
+build\ets2\trailer_test.exe
 exit /b %errorlevel%
 

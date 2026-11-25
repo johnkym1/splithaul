@@ -8,6 +8,7 @@
 /confirmed_deliveries/
 /tools/
 /dist/
+/trailer_mods/*.scs
 /publish/
 /_ref/
 /app_options.json

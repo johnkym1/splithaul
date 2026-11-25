@@ -22,4 +22,5 @@ std::string csvText(const std::string& value);
 HistoryExport exportJobHistory(const std::filesystem::path& project,const std::filesystem::path& bridge,const Catalog* catalog,bool profileScoped=false);
 std::vector<HistoryEntry> readHistoryEntries(const std::filesystem::path& project,const Catalog* catalog);
 void saveHistoryCsvCopy(const std::filesystem::path& project,const std::filesystem::path& destination,bool profileScoped=false);
+void saveHistoryCsvSelection(const std::filesystem::path& profile,const std::filesystem::path& destination,const Catalog* catalog,const std::string& id={},const std::string& session={});
 }

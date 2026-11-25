@@ -16,6 +16,8 @@
 #include "app_theme.h"
 #include "history_page.h"
 #include "profile_files.h"
+#include "profile_controls.h"
+#include "update_controls.h"
 #include "win_text.h"
 #include "../dispatch_shared/app_launcher.h"
 #include <algorithm>
@@ -32,7 +34,7 @@ static HFONT normalFont=nullptr,titleFont=nullptr,sectionFont=nullptr;
 static bool syncing=false;
 static HINSTANCE instance=nullptr;
 static std::unique_ptr<LivePanel> livePanel;
-static HWND modeCombo=nullptr;
+static HWND modeCombo=nullptr,randomCheck=nullptr;
 static bool liveMode=true;
 static std::unique_ptr<Branding> branding;
 static HWND logo=nullptr;
@@ -54,7 +56,7 @@ static RunningGames detectRunningGames() {
 static fs::path profileSettings;
 static void saveCurrentOptions(const AppOptions& options) {
     if(profileSettings.empty()){saveOptions(model->root,options);return;}
-    auto data=live::readJson(profileSettings);data["mode"]=options.mode;data["dark_theme"]=options.dark;
+    auto data=live::readJson(profileSettings);data["mode"]=options.mode;data["dark_theme"]=options.dark;data["random"]=options.random;
     decodeOptions(data);live::writeJson(profileSettings,data);
 }
 static AppTheme theme;
@@ -65,6 +67,8 @@ static State etsMultiple,etsSingle;
 static HWND optionsButton=nullptr,modeLabel=nullptr,themeButton=nullptr,optionsHelp=nullptr;
 static HWND aboutHeading=nullptr,aboutText=nullptr,themeHeading=nullptr;
 static HWND donateButton=nullptr,donateHelp=nullptr;
+static std::unique_ptr<ProfileControls> profileControls;
+static std::unique_ptr<UpdateControls> updateControls;
 static std::array<HWND,5> dispatchHeadings{};
 constexpr int SaveId=200,NewId=201,RefreshId=202,FirstId=203,FinalId=204;
 static void mode() {
@@ -74,8 +78,12 @@ static void mode() {
     for(auto h:{hint,statusText,details,saveButton,newButton,refreshButton,finalButton})ShowWindow(h,planner?SW_SHOW:SW_HIDE);
     ShowWindow(firstButton,planner&&multiple?SW_SHOW:SW_HIDE);
     for(auto h:{modeCombo,modeLabel,themeButton,themeHeading,optionsHelp,aboutHeading,aboutText,donateButton,donateHelp})ShowWindow(h,optionsPage?SW_SHOW:SW_HIDE);
+    SendMessageW(randomCheck,BM_SETCHECK,appOptions.random?BST_CHECKED:BST_UNCHECKED,0);
+    ShowWindow(randomCheck,optionsPage&&appOptions.mode%2==1?SW_SHOW:SW_HIDE);
+    if(profileControls)profileControls->show(optionsPage);
+    if(updateControls)updateControls->show(optionsPage);
     SetWindowTextW(optionsButton,optionsPage?L"Dispatch":L"Options");SetWindowTextW(historyButton,historyVisible?L"Dispatch":L"History");SetWindowTextW(subtitle,historyVisible?L"History":optionsPage?L"Options":modeLabels[static_cast<size_t>(appOptions.mode)]);
-    if(livePanel)livePanel->show(liveMode&&!optionsPage&&!historyVisible);
+    if(livePanel){livePanel->setRandom(appOptions.random);livePanel->show(liveMode&&!optionsPage&&!historyVisible);}
     if(historyPage)historyPage->show(historyVisible);
     for(auto h:dispatchHeadings)ShowWindow(h,!optionsPage&&!historyVisible?SW_SHOW:SW_HIDE);
     SetWindowTextW(dispatchHeadings[1],liveMode?L"Trailer and loading":L"Route guidance");
@@ -141,11 +149,23 @@ static void render() {
 }
 static int scale(int value) {return MulDiv(value,static_cast<int>(GetDpiForWindow(window)),96);}
 static void position(HWND control,int x,int y,int width,int height) {MoveWindow(control,scale(x),scale(y),scale(width),scale(height),TRUE);}
+static int modeComboWidth() {
+    const auto dc=GetDC(modeCombo);if(!dc)return 150;
+    const auto previous=SelectObject(dc,normalFont);int longest=0;
+    for(const auto caption:modeLabels){SIZE size={};GetTextExtentPoint32W(dc,caption,lstrlenW(caption),&size);longest=(std::max)(longest,static_cast<int>(size.cx));}
+    SelectObject(dc,previous);ReleaseDC(modeCombo,dc);
+    // Allow for the themed text insets and dropdown arrow, at the current DPI.
+    return MulDiv(longest,96,static_cast<int>(GetDpiForWindow(window)))+48;
+}
 static void layout() {
     if(!title)return;RECT client;GetClientRect(window,&client);const auto dpi=GetDpiForWindow(window);const int width=MulDiv(client.right,96,static_cast<int>(dpi)),height=MulDiv(client.bottom,96,static_cast<int>(dpi));
-    position(logo,24,12,52,52);position(title,90,14,width-350,34);position(subtitle,90,50,width-350,22);position(historyButton,width-236,20,100,34);position(optionsButton,width-124,20,100,34);
-    position(modeLabel,44,112,width-88,26);position(modeCombo,44,152,(std::min)(420,width-88),220);
-    position(themeHeading,44,252,width-88,26);position(themeButton,44,292,220,36);
+    position(logo,24,12,52,52);position(title,90,14,width-362,34);position(subtitle,90,50,width-362,22);position(historyButton,width-248,20,100,34);position(optionsButton,width-136,20,100,34);
+    const int modeWidth=modeComboWidth();
+    position(modeLabel,44,112,(std::max)(330,width/2)-76,26);position(modeCombo,44,152,modeWidth,220);
+    position(randomCheck,44+modeWidth+20,152,112,28);
+    if(profileControls)profileControls->layout(width,dpi);
+    position(themeHeading,44,252,(std::max)(330,width/2)-76,26);position(themeButton,44,292,220,36);
+    if(updateControls)updateControls->layout(width,dpi);
     position(aboutHeading,44,392,width-88,28);position(aboutText,44,432,width-88,150);
     position(donateButton,44,594,172,36);position(donateHelp,232,594,width-276,44);
     position(optionsHelp,44,662,width-88,138);
@@ -153,7 +173,7 @@ static void layout() {
     const int column=(width-64)/2;
     position(dispatchHeadings[0],44,112,width-88,26);position(dispatchHeadings[1],44,page.guidanceTop+12,width-88,26);
     position(dispatchHeadings[2],44,page.actionsTop+10,width-88,26);position(dispatchHeadings[3],44,page.statusTop+12,column-40,26);position(dispatchHeadings[4],60+column,page.statusTop+12,column-40,26);
-    for(size_t i=0;i<FieldCount;++i){const int y=144+static_cast<int>(i)*36;position(labels[i],44,y+4,216,26);position(combos[i],266,y,(std::min)(420,width-310),340);}
+    for(size_t i=0;i<FieldCount;++i){const int y=DispatchLayout::fieldTop(static_cast<int>(i));position(labels[i],44,y+4,216,26);position(combos[i],266,y,(std::min)(420,width-310),340);}
     position(hint,44,page.guidanceTop+38,width-88,42);
     const int buttonWidth=(width-112)/3;
     position(saveButton,44,page.actionsTop+38,buttonWidth,36);position(newButton,56+buttonWidth,page.actionsTop+38,buttonWidth,36);position(refreshButton,68+buttonWidth*2,page.actionsTop+38,buttonWidth,36);
@@ -170,13 +190,21 @@ static void paintPageBoxes(HDC dc,int width,int height) {
     const auto pen=CreatePen(PS_SOLID,scale(1),theme.border);
     const auto oldPen=SelectObject(dc,pen),oldBrush=SelectObject(dc,GetStockObject(NULL_BRUSH));
     auto box=[&](int x,int y,int w,int h){RoundRect(dc,scale(x),scale(y),scale(x+w),scale(y+h),scale(12),scale(12));};
-    box(width-248,8,236,58);
+    box(width-260,8,236,58);
     if(optionsPage){
         box(24,96,width-48,124);box(24,236,width-48,124);box(24,376,width-48,440);
+        const int divider=(std::max)(330,width/2)-20;
+        MoveToEx(dc,scale(divider),scale(116),nullptr);LineTo(dc,scale(divider),scale(200));
+        MoveToEx(dc,scale(divider),scale(256),nullptr);LineTo(dc,scale(divider),scale(340));
         MoveToEx(dc,scale(44),scale(648),nullptr);LineTo(dc,scale(width-44),scale(648));
     }else{
         const DispatchLayout page(liveMode,appOptions.mode==1||appOptions.mode==3,height);
         box(24,96,width-48,page.routeBottom-96);box(24,page.guidanceTop,width-48,page.guidanceHeight);box(24,page.actionsTop,width-48,page.actionsHeight);
+        for(const int row:{0,3,5}){
+            if(row==5&&appOptions.mode!=1&&appOptions.mode!=3)continue;
+            const int y=DispatchLayout::fieldTop(row)-10;
+            MoveToEx(dc,scale(44),scale(y),nullptr);LineTo(dc,scale(width-44),scale(y));
+        }
         const int column=(width-64)/2;box(24,page.statusTop,column,page.statusHeight);box(40+column,page.statusTop,column,page.statusHeight);
     }
     SelectObject(dc,oldBrush);SelectObject(dc,oldPen);DeleteObject(pen);
@@ -194,6 +222,8 @@ static void fonts() {
     SendMessageW(title,WM_SETFONT,reinterpret_cast<WPARAM>(nextTitle),TRUE);
     for(auto h:{modeLabel,themeHeading,aboutHeading})SendMessageW(h,WM_SETFONT,reinterpret_cast<WPARAM>(nextSection),TRUE);
     for(auto h:dispatchHeadings)SendMessageW(h,WM_SETFONT,reinterpret_cast<WPARAM>(nextSection),TRUE);
+    if(profileControls)profileControls->headingFont(nextSection);
+    if(updateControls)updateControls->headingFont(nextSection);
     if(sectionFont)DeleteObject(sectionFont);sectionFont=nextSection;
     if(normalFont)DeleteObject(normalFont);if(titleFont)DeleteObject(titleFont);normalFont=next;titleFont=nextTitle;
 }
@@ -225,9 +255,10 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             modeCombo=control(WC_COMBOBOXW,L"",WS_TABSTOP|CBS_DROPDOWNLIST|CBS_HASSTRINGS|CBS_OWNERDRAWFIXED,300);
             for(const auto caption:modeLabels)SendMessageW(modeCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(caption));
             SendMessageW(modeCombo,CB_SETCURSEL,appOptions.mode,0);
+            randomCheck=control(L"BUTTON",L"Random",WS_TABSTOP|BS_AUTOCHECKBOX,305);
             themeButton=control(L"BUTTON",appOptions.dark?L"Dark theme: On":L"Dark theme: Off",WS_TABSTOP,302);
             themeHeading=control(L"STATIC",L"Appearance",SS_LEFT,0);
-            optionsHelp=control(L"STATIC",L"When one simulator is running, its game is selected automatically. Switching games starts in single mode; the current game's single or multiple choice is kept.\n\nAttach one owned trailer. Cancellation needs a supported DLL and a stopped truck in the game menu.",SS_LEFT,0);
+            optionsHelp=control(L"STATIC",L"When one simulator is running, its game is selected automatically. Switching games starts in single mode; the current game's single or multiple choice is kept.\n\nAttach an owned combination: up to 3 trailers in ATS or 2 in ETS2. Recognised dollies are excluded. Cancellation needs a supported DLL and a stopped truck in the game menu.",SS_LEFT,0);
             aboutHeading=control(L"STATIC",L"About Dispatch Companion",SS_LEFT,0);
             aboutText=control(L"STATIC",
                 L"Made by " DISPATCH_AUTHOR_WIDE L" · Version " DISPATCH_VERSION_WIDE L" (development)\n"
@@ -253,13 +284,22 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             finalButton=control(L"BUTTON",L"Mark final delivery complete",WS_TABSTOP,FinalId);
             livePanel=std::make_unique<LivePanel>(hwnd,instance,model->root);
             historyPage=std::make_unique<HistoryPage>(hwnd,instance,model->root,theme);
+            profileControls=std::make_unique<ProfileControls>(hwnd,model->root,[]{return livePanel?livePanel->activeProfileData():fs::path();});
+            updateControls=std::make_unique<UpdateControls>(hwnd);
             livePanel->setTwoStop(appOptions.mode%2==1);
             fonts();theme.apply(hwnd,appOptions.dark);historyPage->applyTheme();render();mode();layout();SetTimer(hwnd,1,1000,nullptr);return 0;
         }
         case WM_COMMAND: {
             const int id=LOWORD(wp);
+            if(profileControls&&profileControls->command(id,HIWORD(wp)))return 0;
+            if(id==306&&HIWORD(wp)==BN_CLICKED){if(updateControls)updateControls->start();return 0;}
             if(id==301&&HIWORD(wp)==BN_CLICKED){optionsPage=!optionsPage;historyVisible=false;mode();layout();return 0;}
             if(id==303&&HIWORD(wp)==BN_CLICKED){historyVisible=!historyVisible;optionsPage=false;mode();layout();return 0;}
+            if(id==305&&HIWORD(wp)==BN_CLICKED){
+                auto next=appOptions;next.random=SendMessageW(randomCheck,BM_GETCHECK,0,0)==BST_CHECKED;
+                try{saveCurrentOptions(next);}catch(...){SendMessageW(randomCheck,BM_SETCHECK,appOptions.random?BST_CHECKED:BST_UNCHECKED,0);throw;}
+                appOptions=next;livePanel->setRandom(appOptions.random);return 0;
+            }
             if(id==304&&HIWORD(wp)==BN_CLICKED){
                 if(appLinks::donationAvailable&&reinterpret_cast<INT_PTR>(ShellExecuteW(hwnd,L"open",appLinks::donationUrl,nullptr,nullptr,SW_SHOWNORMAL))<=32)
                     throw std::runtime_error("Cannot open the donation page. Check your default browser and try again.");
@@ -292,7 +332,7 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             return 0;
         }
         case WM_SIZE:layout();return 0;
-        case WM_TIMER:if(livePanel){const auto running=detectRunningGames();if(running!=lastRunningGames){lastRunningGames=running;selectRunningGame(running);}livePanel->tick();if(livePanel->connectedGameExited()){DestroyWindow(hwnd);return 0;}if(historyPage)historyPage->setProfile(livePanel->activeProfileData());}if(historyPage)historyPage->tick();return 0;
+        case WM_TIMER:if(livePanel){const auto running=detectRunningGames();if(running!=lastRunningGames){lastRunningGames=running;selectRunningGame(running);}livePanel->tick();if(livePanel->connectedGameExited()){DestroyWindow(hwnd);return 0;}if(historyPage)historyPage->setProfile(livePanel->activeProfileData());}if(historyPage)historyPage->tick();if(optionsPage&&profileControls)profileControls->refresh();if(updateControls)updateControls->poll();return 0;
         case WM_NOTIFY:{LRESULT result=0;if(historyPage&&historyPage->notify(reinterpret_cast<const NMHDR*>(lp),result))return result;break;}
         case HistoryPage::OpenMessage:historyVisible=true;optionsPage=false;mode();layout();return 0;
         case LivePanel::RestartReviewMessage:if(livePanel)livePanel->reviewRestart();return 0;
@@ -316,11 +356,12 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case WM_DRAWITEM:{const auto item=reinterpret_cast<DRAWITEMSTRUCT*>(lp);if(item&&item->CtlID==601&&branding){branding->paint(*item,theme.backgroundHandle());return TRUE;}if(item&&theme.draw(*item))return TRUE;break;}
         case WM_MEASUREITEM:{const auto item=reinterpret_cast<MEASUREITEMSTRUCT*>(lp);if(item&&item->CtlType==ODT_COMBOBOX){item->itemHeight=static_cast<UINT>(scale(24));return TRUE;}break;}
         case WM_GETMINMAXINFO: {
-            auto info=reinterpret_cast<MINMAXINFO*>(lp);const UINT dpi=GetDpiForWindow(hwnd);RECT r={0,0,MulDiv(700,static_cast<int>(dpi),96),MulDiv(900,static_cast<int>(dpi),96)};
+            auto info=reinterpret_cast<MINMAXINFO*>(lp);const UINT dpi=GetDpiForWindow(hwnd);RECT r={0,0,MulDiv(700,static_cast<int>(dpi),96),MulDiv(DispatchLayout::minimumHeight,static_cast<int>(dpi),96)};
             AdjustWindowRectExForDpi(&r,WS_OVERLAPPEDWINDOW,FALSE,0,dpi);info->ptMinTrackSize={r.right-r.left,r.bottom-r.top};return 0;
         }
         case WM_DPICHANGED: {const auto r=reinterpret_cast<RECT*>(lp);SetWindowPos(hwnd,nullptr,r->left,r->top,r->right-r->left,r->bottom-r->top,SWP_NOZORDER|SWP_NOACTIVATE);fonts();layout();return 0;}
-        case WM_CTLCOLORSTATIC:case WM_CTLCOLORBTN:return theme.color(reinterpret_cast<HDC>(wp),false);
+        case WM_CTLCOLORSTATIC:{const auto control=reinterpret_cast<HWND>(lp);const int id=GetDlgCtrlID(control);return theme.color(reinterpret_cast<HDC>(wp),id==617||id==618,id==619||!IsWindowEnabled(control));}
+        case WM_CTLCOLORBTN:return theme.color(reinterpret_cast<HDC>(wp),false,!IsWindowEnabled(reinterpret_cast<HWND>(lp)));
         case WM_CTLCOLOREDIT:case WM_CTLCOLORLISTBOX:return theme.color(reinterpret_cast<HDC>(wp),true);
         case WM_ERASEBKGND:{RECT area;GetClientRect(hwnd,&area);const auto dc=reinterpret_cast<HDC>(wp);FillRect(dc,&area,theme.backgroundHandle());const auto dpi=static_cast<int>(GetDpiForWindow(hwnd));paintPageBoxes(dc,MulDiv(area.right,96,dpi),MulDiv(area.bottom,96,dpi));return TRUE;}
         case WM_DESTROY:RemovePropW(hwnd,dispatchLauncher::windowProperty);KillTimer(hwnd,1);PostQuitMessage(0);return 0;
@@ -368,10 +409,19 @@ int WINAPI wWinMain(HINSTANCE app,HINSTANCE,PWSTR,int show) {
         INITCOMMONCONTROLSEX common={sizeof(common),ICC_STANDARD_CLASSES|ICC_LISTVIEW_CLASSES};InitCommonControlsEx(&common);
         WNDCLASSEXW wc={};wc.cbSize=sizeof(wc);wc.hInstance=app;wc.lpfnWndProc=procedure;wc.lpszClassName=L"CppTwoStopDispatch";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);wc.hIcon=branding->largeIcon();wc.hIconSm=branding->smallIcon();wc.hbrBackground=GetSysColorBrush(COLOR_WINDOW);
         if(!RegisterClassExW(&wc))throw std::runtime_error("Cannot register the app window.");
-        const UINT dpi=GetDpiForSystem();RECT r={0,0,MulDiv(780,static_cast<int>(dpi),96),MulDiv(900,static_cast<int>(dpi),96)};AdjustWindowRectExForDpi(&r,WS_OVERLAPPEDWINDOW,FALSE,0,dpi);
+        const UINT dpi=GetDpiForSystem();RECT r={0,0,MulDiv(780,static_cast<int>(dpi),96),MulDiv(DispatchLayout::minimumHeight,static_cast<int>(dpi),96)};AdjustWindowRectExForDpi(&r,WS_OVERLAPPEDWINDOW,FALSE,0,dpi);
         const auto caption=L"Dispatch Companion";
         window=CreateWindowExW(0,wc.lpszClassName,caption,WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,r.right-r.left,r.bottom-r.top,nullptr,nullptr,app,nullptr);
         if(!window)throw std::runtime_error("Cannot create the app window.");
+        // The opening monitor can use a different DPI from the system default.
+        // Size the height using the window's actual DPI so the lower panels fit.
+        const UINT windowDpi=GetDpiForWindow(window);RECT opening={};GetWindowRect(window,&opening);
+        RECT tall={0,0,0,MulDiv(DispatchLayout::minimumHeight,static_cast<int>(windowDpi),96)};
+        AdjustWindowRectExForDpi(&tall,WS_OVERLAPPEDWINDOW,FALSE,0,windowDpi);
+        const int openingHeight=tall.bottom-tall.top;
+        MONITORINFO monitor={};monitor.cbSize=sizeof(monitor);int openingY=opening.top;
+        if(GetMonitorInfoW(MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST),&monitor))openingY=(std::max)(monitor.rcWork.top,(std::min)(opening.top,monitor.rcWork.bottom-openingHeight));
+        SetWindowPos(window,nullptr,opening.left,openingY,opening.right-opening.left,openingHeight,SWP_NOZORDER|SWP_NOACTIVATE);
         ShowWindow(window,show);SetForegroundWindow(window);UpdateWindow(window);MSG msg;int next=0;
         while((next=GetMessageW(&msg,nullptr,0,0))>0){if(!IsDialogMessageW(window,&msg)){TranslateMessage(&msg);DispatchMessageW(&msg);}}
         result=next<0?1:static_cast<int>(msg.wParam);

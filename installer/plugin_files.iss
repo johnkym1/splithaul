@@ -18,11 +18,11 @@ procedure AtomicCopy(Source, Target: String);
 var Stage: String;
 begin
   Stage := Target + '.grumpyman-update.tmp';
-  if FileExists(Stage) then RaiseException('A previous telemetry update is unfinished: ' + Stage);
-  if not FileCopy(Source, Stage, True) then RaiseException('Could not stage telemetry file: ' + Target);
+  if FileExists(Stage) then RaiseException('A previous file update is unfinished: ' + Stage);
+  if not FileCopy(Source, Stage, True) then RaiseException('Could not stage file: ' + Target);
   try
-    if GetSHA256OfFile(Source) <> GetSHA256OfFile(Stage) then RaiseException('Telemetry copy verification failed.');
-    if not MoveFileEx(Stage, Target, 9) then RaiseException('Could not replace telemetry file. Close the game and try again.');
+    if GetSHA256OfFile(Source) <> GetSHA256OfFile(Stage) then RaiseException('File copy verification failed.');
+    if not MoveFileEx(Stage, Target, 9) then RaiseException('Could not replace file. Close the game and try again: ' + Target);
   finally
     if FileExists(Stage) then DeleteFile(Stage);
   end;

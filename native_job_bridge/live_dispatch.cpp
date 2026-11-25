@@ -1,4 +1,4 @@
-// Configurable single-owned-trailer dispatch. Native calls remain exact-build gated.
+// Configurable owned-trailer combination dispatch. Native calls remain exact-build gated.
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
@@ -31,6 +31,7 @@ static uintptr_t imageBase=0;
 static bool disabled=false,nativeFault=false;
 #include "host_builds.h"
 #include "native_calls.h"
+#include "native_trailers.h"
 #ifdef GT_ENABLE_EXPERIMENTAL_CANCELLATION
 #include "cancellation_build.h"
 #endif
@@ -59,6 +60,8 @@ static ULONGLONG carryDeadline=0;
 static unsigned beforeLoadRevision=0;
 static float navigationDistance=0;
 static ULONGLONG lastNavigationDistance=0;
+static double truckX=0,truckZ=0;
+static ULONGLONG lastPosition=0;
 static unsigned beforeRevision=0;
 static uint32_t expectedUnits=0,routeMaximumUnits=0;
 static float expectedUnitKg=0;
@@ -78,7 +81,9 @@ static bool testCancelEmit=true;
 
 struct Objects {uintptr_t economy=0,player=0,vehicles=0,ownedTrailer=0,definition=0,source=0,target=0,cargo=0;};
 static bool basicObjects(Objects& o) {
-    return word(imageBase+economyRva,o.economy)&&liveUnit(o.economy)&&word(o.economy+0x18,o.player)&&liveUnit(o.player)&&word(o.player+0xa0,o.vehicles)&&liveUnit(o.vehicles)&&word(o.vehicles+0x48,o.ownedTrailer)&&liveUnit(o.ownedTrailer)&&word(o.ownedTrailer+0x1a0,o.definition)&&liveUnit(o.definition);
+    const bool found=word(imageBase+economyRva,o.economy)&&liveUnit(o.economy)&&word(o.economy+0x18,o.player)&&liveUnit(o.player)&&word(o.player+0xa0,o.vehicles)&&liveUnit(o.vehicles)&&word(o.vehicles+0x48,o.ownedTrailer)&&liveUnit(o.ownedTrailer)&&word(o.ownedTrailer+0x1a0,o.definition)&&liveUnit(o.definition);
+    trailer.combination=found?readTrailerCombination(o.ownedTrailer):live::TrailerCombination{};
+    return found;
 }
 static bool trailerCapacity(const Objects& o,live::TrailerCapacity& cap) {
     return readMemory(o.definition+0x30,&cap.grossKg,4)&&readMemory(o.definition+0x34,&cap.chassisKg,4)&&readMemory(o.definition+0x38,&cap.bodyKg,4)&&readMemory(o.definition+0x3c,&cap.axles,4)&&readMemory(o.definition+0x40,&cap.volumeM3,4)&&cap.valid();
@@ -99,7 +104,7 @@ static uint32_t maximumForRoute(const Objects& o,float& unitKg) {
     const auto count=nativeMaximumUnits(&request);
     return count&&count<=geometricMaximum&&count==request.units?count:0;
 }
-static std::string context(const Objects& o) {std::ostringstream s;s<<std::hex<<o.economy<<':'<<o.player<<':'<<o.vehicles<<':'<<o.ownedTrailer;return s.str();}
+static std::string context(const Objects& o) {std::ostringstream s;s<<std::hex<<o.economy<<':'<<o.player<<':'<<o.vehicles<<':'<<o.ownedTrailer;return s.str()+trailer.combination.identity;}
 #ifdef GT_ENABLE_EXPERIMENTAL_CANCELLATION
 static std::string cancellationTarget(uintptr_t player) {
     uintptr_t ordinary=0,car=0,bus=0;if(!word(player+0x28,ordinary)||!word(player+0x30,car)||!word(player+0x38,bus))return {};
@@ -122,6 +127,7 @@ static bool bodyCompatible(const Objects& o) {
 }
 static const char* findObjects(Objects& o,const live::Route& r) {
     if(!basicObjects(o))return "The owned trailer or player is unavailable.";
+    if(!trailer.supported())return "The attached combination is unverified or exceeds this game's trailer limit.";
     for(uintptr_t off=0x28;off<=0x38;off+=8){uintptr_t active=0;if(!word(o.player+off,active)||active)return "An active native job already exists.";}
     uint32_t mode=0;if(!readMemory(o.player+0x98,&mode,4)||mode!=0)return "Truck mode is required.";
     uintptr_t root=0,actor=0;if(!word(imageBase+mainGameRva,root)||!root||!word(root+0x31b0,actor)||!liveUnit(actor))return "Return to the driving view.";
@@ -165,7 +171,7 @@ static void guideToPickup() {
     const auto now=GetTickCount64();Objects o;const bool world=basicObjects(o);
     const bool sameContext=world&&context(o)==working.context&&trailer.signature()==working.trailer;
     const bool stationary=lastSpeed&&now-lastSpeed<2000&&std::isfinite(speed)&&std::fabs(speed)<=0.1f;
-    const bool attached=lastTrailer&&now-lastTrailer<2000&&trailer.connected&&trailer.chain=="single";
+    const bool attached=lastTrailer&&now-lastTrailer<2000&&trailer.connected&&trailer.supported();
     const bool unloaded=job.matches(working.route)&&job.loadedKnown&&!job.loaded;
     if(!pickupNavigation.ready(unloaded,sameContext,driving,stationary,attached,now)) {
         if(!pickupNavigation.pending&&unloaded)result(working,"assigned","Job assigned. Pickup navigation was unavailable; set a waypoint to the pickup depot manually.",navigationStatus());
@@ -199,7 +205,7 @@ static void publish() {
 #ifdef GT_ENABLE_EXPERIMENTAL_CANCELLATION
     cancellationInFlight=!pendingCancelId.empty();
 #endif
-    const bool canQueue=!cancellationInFlight&&!disabled&&!chain.active()&&!awaiting&&!monitoring&&!job.active&&!carActive&&!busActive&&jobSeen&&carSeen&&busSeen&&trailer.connected&&trailer.chain=="single"&&!trailer.signature().empty()&&world&&!fs::exists(folder/"request.json");
+    const bool canQueue=!cancellationInFlight&&!disabled&&!chain.active()&&!awaiting&&!monitoring&&!job.active&&!carActive&&!busActive&&jobSeen&&carSeen&&busSeen&&trailer.connected&&trailer.supported()&&!trailer.signature().empty()&&world&&!fs::exists(folder/"request.json");
     Json value={{"protocol",live::protocolVersion},{"game",dispatchGame::id},{"online",true},{"pid",GetCurrentProcessId()},{"session_id",session},{"updated_utc_ms",live::utcMs()},{"state",state},{"context_id",token},{"can_queue",canQueue},{"disabled",disabled},{"driving",driving},{"trailer",trailer.json()},{"job",job.json()},{"last_request_id",lastId},{"last_progress",lastProgress},{"awaiting_confirmation",awaiting},{"host_sha256",activeHostHash?activeHostHash:""},{"plugin","GT_Telemetry.dll"}};
     value["build_id"]=dispatchGame::build;value["resumed_monitoring"]=resumedTracking&&monitoring;value["app_launcher"]=appHotkey::status();value["navigation"]=navigationStatus();value["trailer_capacity"]=world?capacityJson(o):Json{{"available",false}};if(chain.enabled())value["plan"]=chain.json(session);
     value["menu_snapshot"]={{"captured",menuSnapshot.captured},{"speed_mps",menuSnapshot.speedKnown?Json(menuSnapshot.speedMps):Json(nullptr)},{"stopped",menuSnapshot.stopped()},{"ignition_on",menuSnapshot.ignitionKnown?Json(menuSnapshot.ignitionOn):Json(nullptr)}};
@@ -208,6 +214,7 @@ static void publish() {
     value["cancel_target_token"]=world?cancellationTarget(o.player):std::string();
     value["car_job_active"]=carSeen&&carActive;value["bus_job_active"]=busSeen&&busActive;
 #endif
+    value["truck_position"]=lastPosition&&GetTickCount64()-lastPosition<2000?Json{{"x",truckX},{"z",truckZ}}:Json(nullptr);
     value["speed_mps"]=lastSpeed&&GetTickCount64()-lastSpeed<2000&&std::isfinite(speed)?Json(speed):Json(nullptr);live::writeJson(folder/"status.json",value);
 }
 static bool claim(const fs::path& incoming,const std::string& id) {
@@ -220,7 +227,7 @@ static void executeClaimed(uintptr_t registry,const live::Request& r,bool carrie
     Objects o;const char* reason=findObjects(o,r.route);
     if(reason){result(r,"rejected",reason);return;}
     if(r.twoStop){Objects finalObjects;reason=findObjects(finalObjects,r.finalRoute);if(reason){result(r,"rejected",std::string("Final delivery: ")+reason);return;}}
-    if(context(o)!=r.context){result(r,"rejected","The selected vehicle or profile changed.");return;}
+    if(context(o)!=r.context||trailer.signature()!=r.trailer){result(r,"rejected","The selected vehicle, trailer combination or profile changed.");return;}
     routeMaximumUnits=maximumForRoute(o,expectedUnitKg);
     if(!routeMaximumUnits){result(r,"rejected","The maximum cargo load could not be verified for this trailer and route.");return;}
     expectedUnits=carried?chain.finalUnits:routeMaximumUnits;
@@ -237,7 +244,7 @@ static void executeClaimed(uintptr_t registry,const live::Request& r,bool carrie
     if(!createOffer(registry,r.route)){result(r,"failed","Offer creation failed; this request will not be retried.");if(nativeFault)disabled=true;return;}
     const auto selected=matchingOffer(o,r.route);if(!selected){result(r,"failed","The game did not produce exactly one matching compatible Cargo Market offer. No assignment was attempted.");return;}
     Objects checked;reason=findObjects(checked,r.route);
-    if(reason||context(checked)!=context(o)||checked.definition!=o.definition||checked.cargo!=o.cargo||checked.source!=o.source||checked.target!=o.target||!bodyCompatible(checked)){result(r,"failed","Game state changed after offer creation. No assignment was attempted.");return;}
+    if(reason||context(checked)!=r.context||trailer.signature()!=r.trailer||checked.definition!=o.definition||checked.cargo!=o.cargo||checked.source!=o.source||checked.target!=o.target||!bodyCompatible(checked)){result(r,"failed","Game state changed after offer creation. No assignment was attempted.");return;}
     uintptr_t table=0;uint32_t originalUnits=0;
     if(!word(selected,table)||table!=imageBase+cargoOfferVtableRva||!readMemory(selected+0xcc,&originalUnits,4)||!originalUnits||originalUnits>1000000||!setOfferUnits(selected,expectedUnits,float(expectedUnits)/routeMaximumUnits)){result(r,"uncertain","Cargo quantity could not be set safely. No assignment retry.");disabled=true;return;}
     uint32_t checkedUnits=0;if(!readMemory(selected+0xcc,&checkedUnits,4)||checkedUnits!=expectedUnits){result(r,"uncertain","Cargo quantity verification failed. No assignment attempted.");disabled=true;return;}
@@ -251,7 +258,7 @@ static void tryHandoff(uintptr_t registry) {
     Objects o;if(!basicObjects(o))return;
     const bool same=context(o)==chain.first.context&&trailer.signature()==chain.first.trailer;
     const auto now=GetTickCount64();
-    const bool ready=driving&&lastSpeed&&now-lastSpeed<2000&&std::isfinite(speed)&&std::fabs(speed)<=0.1f&&lastTrailer&&now-lastTrailer<2000&&trailer.connected&&trailer.chain=="single";
+    const bool ready=driving&&lastSpeed&&now-lastSpeed<2000&&std::isfinite(speed)&&std::fabs(speed)<=0.1f&&lastTrailer&&now-lastTrailer<2000&&trailer.connected&&trailer.supported();
     // Delivery screens briefly reset trailer configuration. Judge identity only
     // after fresh Drive samples, not during those transient menu resets.
     if(!ready||!trailer.configured||trailer.signature().empty())return;
@@ -277,7 +284,7 @@ static void pollRequest(uintptr_t registry) {
     if(!jobSeen||!carSeen||!busSeen){setState("waiting_job_configurations");return;}
     const auto now=GetTickCount64();
     if(!driving||!lastSpeed||now-lastSpeed>2000||!std::isfinite(speed)||std::fabs(speed)>0.1f){setState("request_waiting_stationary_driving");return;}
-    if(!lastTrailer||now-lastTrailer>2000||!trailer.connected||trailer.chain!="single"){setState("request_waiting_single_attached_trailer");return;}
+    if(!lastTrailer||now-lastTrailer>2000||!trailer.connected||!trailer.supported()){setState("request_waiting_supported_attached_combination");return;}
     if(!claim(incoming,r.id))return;
     executeClaimed(registry,r);
 }
@@ -290,7 +297,7 @@ static void pollResume() {
         const auto id=request.at("request_id").get<std::string>(),original=request.at("original_session_id").get<std::string>();
         const auto created=request.at("created_utc_ms").get<uint64_t>();
         if(request.at("protocol")!=live::protocolVersion||request.at("target_session_id")!=session||!live::requestId(id)||!live::requestId(original)||created>now+5000||now>created+10000||disabled||awaiting||monitoring||chain.active()||carActive||busActive||!jobSeen)return;
-        Objects o;if(!basicObjects(o)||request.at("context_id")!=context(o)||request.at("trailer_signature")!=trailer.signature()||!trailer.connected||trailer.chain!="single")return;
+        Objects o;if(!basicObjects(o)||request.at("context_id")!=context(o)||request.at("trailer_signature")!=trailer.signature()||!trailer.connected||!trailer.supported())return;
         const auto previous=live::readJson(folder/"results"/(id+".json"));
         const auto claim=live::parseRequest(live::readJson(folder/"claims"/(id+".json")));
         if(claim.twoStop||claim.id!=id||claim.session!=original||claim.trailer!=trailer.signature()||live::routeJson(claim.route)!=previous.at("route"))return;
@@ -306,7 +313,7 @@ static void pollResume() {
 }
 static void openForRecoveredJob() {
     const auto now=GetTickCount64();
-    if(!driving||!jobSeen||!job.active||monitoring||awaiting||disabled||!lastSpeed||now-lastSpeed>2000||!std::isfinite(speed)||std::fabs(speed)>0.1f||!lastTrailer||now-lastTrailer>2000||!trailer.connected||trailer.chain!="single"||trailer.signature().empty()||now-lastAutoOpenCheck<5000)return;
+    if(!driving||!jobSeen||!job.active||monitoring||awaiting||disabled||!lastSpeed||now-lastSpeed>2000||!std::isfinite(speed)||std::fabs(speed)>0.1f||!lastTrailer||now-lastTrailer>2000||!trailer.connected||!trailer.supported()||trailer.signature().empty()||now-lastAutoOpenCheck<5000)return;
     lastAutoOpenCheck=now;
     try {
         dispatchLauncher::Paths paths;if(!dispatchLauncher::registered(paths))return;
@@ -478,6 +485,11 @@ static void tick() {
 SCSAPI_VOID liveSpeed(const scs_string_t,const scs_u32_t,const scs_value_t* v,const scs_context_t) {if(v&&v->type==SCS_VALUE_TYPE_float){speed=v->value_float.value;lastSpeed=GetTickCount64();}else lastSpeed=0;}
 SCSAPI_VOID liveIgnition(const scs_string_t,const scs_u32_t,const scs_value_t* v,const scs_context_t) {if(v&&v->type==SCS_VALUE_TYPE_bool){ignitionOn=v->value_bool.value!=0;lastIgnition=GetTickCount64();}else lastIgnition=0;}
 SCSAPI_VOID liveTrailer(const scs_string_t,const scs_u32_t,const scs_value_t* v,const scs_context_t) {if(v&&v->type==SCS_VALUE_TYPE_bool){trailer.connected=v->value_bool.value!=0;lastTrailer=GetTickCount64();}else lastTrailer=0;}
+SCSAPI_VOID livePosition(const scs_string_t,const scs_u32_t,const scs_value_t* v,const scs_context_t) {
+    lastPosition=0;if(!v||v->type!=SCS_VALUE_TYPE_dplacement)return;
+    const auto& p=v->value_dplacement.position;if(!std::isfinite(p.x)||!std::isfinite(p.z))return;
+    truckX=p.x;truckZ=p.z;lastPosition=GetTickCount64();
+}
 SCSAPI_VOID liveNavigationDistance(const scs_string_t,const scs_u32_t,const scs_value_t* v,const scs_context_t) {if(v&&v->type==SCS_VALUE_TYPE_float){navigationDistance=v->value_float.value;lastNavigationDistance=GetTickCount64();}else lastNavigationDistance=0;}
 SCSAPI_VOID liveEvent(const scs_event_t event,const void* info,const scs_context_t) {
     try {
@@ -521,6 +533,7 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version,const scs_telemetry_ini
     try {
         folder=live::ipcFolder();for(const auto& dir:{folder,folder/"claims",folder/"results",folder/"duplicates",folder/"plans",folder/"cancel_claims",folder/"cancel_results"})fs::create_directories(dir);
         session=live::uniqueId();callbackThread=GetCurrentThreadId();lastPoll=lastSpeed=lastTrailer=deadline=endedAt=0;disabled=nativeFault=driving=jobSeen=carSeen=busSeen=carActive=busActive=awaiting=monitoring=false;
+        lastPosition=0;truckX=truckZ=0;
         job={};trailer={};working={};pickupNavigation={};chain={};menuSnapshot={};lastIgnition=0;ignitionOn=false;resumedTracking=false;autoOpenedRequest.clear();lastAutoOpenCheck=0;carryMode=carryPending=carryConfirming=false;carryDeadline=0;beforeLoadRevision=0;expectedUnits=routeMaximumUnits=0;expectedUnitKg=0;navigationDistance=0;lastNavigationDistance=0;beforeRevision=0;state="loaded";lastId.clear();lastProgress.clear();
 #ifdef GT_ENABLE_EXPERIMENTAL_CANCELLATION
         pendingCancelId.clear();observedCancelEvent=false;pendingCancelDeadline=0;
@@ -537,6 +550,7 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version,const scs_telemetry_ini
         // Optional read-only diagnostic channel; assignment remains available if
         // another SDK implementation does not expose navigation distance.
         p->register_for_channel("truck.navigation.distance",SCS_U32_NIL,SCS_VALUE_TYPE_float,3,liveNavigationDistance,nullptr);
+        p->register_for_channel("truck.world.placement",SCS_U32_NIL,SCS_VALUE_TYPE_dplacement,3,livePosition,nullptr);
         if(!appHotkey::initialize())log("[GT_TELEMETRY] Shift+F9 listener could not start; dispatch remains available.");
         log((std::string("[GT_TELEMETRY] Build: ")+dispatchGame::build).c_str());log("[GT_TELEMETRY] Configurable live dispatcher loaded (protocol 4). Requests are game-isolated, session-bound and claimed before mutation.");return SCS_RESULT_ok;
     }catch(const std::exception& ex){log(ex.what());return SCS_RESULT_generic_error;}

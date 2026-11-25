@@ -11,14 +11,14 @@ inline const wchar_t* documents=L"American Truck Simulator";
 inline const wchar_t* ipc=L"MSDCLiveDispatch";
 inline const char* profiles="profiles";
 inline const char* savedDispatch="ats_dispatch.json";
-inline const char* build="restart-monitor-20261119-r1";
+inline const char* build="ats-multi-trailer-20261125-r1";
 inline void select(bool ets) {
     id=ets?"ets2":"ats";sdkId=ets?"eut2":"ats";
     executable=ets?L"eurotrucks2.exe":L"amtrucks.exe";
     documents=ets?L"Euro Truck Simulator 2":L"American Truck Simulator";
     ipc=ets?L"MSDCLiveDispatchETS2":L"MSDCLiveDispatch";
     profiles=ets?"profiles_ets2":"profiles";savedDispatch=ets?"ets2_dispatch.json":"ats_dispatch.json";
-    build=ets?"ets2-16233-20261120-r1":"restart-monitor-20261119-r1";
+    build=ets?"ets2-multi-trailer-20261125-r1":"ats-multi-trailer-20261125-r1";
 }
 #elif defined(GT_TARGET_ETS2)
 inline constexpr char id[]="ets2";
@@ -28,7 +28,7 @@ inline constexpr wchar_t documents[]=L"Euro Truck Simulator 2";
 inline constexpr wchar_t ipc[]=L"MSDCLiveDispatchETS2";
 inline constexpr char profiles[]="profiles_ets2";
 inline constexpr char savedDispatch[]="ets2_dispatch.json";
-inline constexpr char build[]="ets2-16233-20261120-r1";
+inline constexpr char build[]="ets2-multi-trailer-20261125-r1";
 #else
 inline constexpr char id[]="ats";
 inline constexpr char sdkId[]="ats";
@@ -37,7 +37,7 @@ inline constexpr wchar_t documents[]=L"American Truck Simulator";
 inline constexpr wchar_t ipc[]=L"MSDCLiveDispatch";
 inline constexpr char profiles[]="profiles";
 inline constexpr char savedDispatch[]="ats_dispatch.json";
-inline constexpr char build[]="restart-monitor-20261119-r1";
+inline constexpr char build[]="ats-multi-trailer-20261125-r1";
 #endif
 inline bool isETS2(){return std::string(id)=="ets2";}
 inline std::string displayText(std::string text) {

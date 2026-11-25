@@ -3,10 +3,14 @@
 
 // Logical (96-DPI) coordinates shared by the page outlines and live controls.
 struct DispatchLayout {
+    static constexpr int minimumHeight=980;
+    static constexpr int fieldTop(int row) {
+        return 156+row*36+(row>=3?12:0)+(row>=5?12:0);
+    }
     int routeBottom, guidanceTop, guidanceHeight, actionsTop, actionsHeight, statusTop, statusHeight;
     DispatchLayout(bool live, bool multiple, int height) {
         const int rows=multiple?(live?8:7):5;
-        routeBottom=160+rows*36;
+        routeBottom=fieldTop(rows-1)+52;
         guidanceTop=routeBottom+12;guidanceHeight=live?170:84;
         actionsTop=guidanceTop+guidanceHeight+12;actionsHeight=live?90:140;
         statusTop=actionsTop+actionsHeight+12;

@@ -174,6 +174,14 @@ int wmain(int argc,wchar_t** argv){
         const bool exportBlocked=rejects([&]{ats::saveHistoryCsvCopy(root,exportFile);});CloseHandle(exportLock);check(exportBlocked&&bytes(exportFile)=="Existing exported file","Failed export damaged the destination's previous contents");
         ats::saveHistoryCsvCopy(root,exportFile);check(bytes(exportFile)==csvBefore,"Export did not recover after destination lock was released");
         const auto noHistory=root/L"no-history";live::fs::create_directories(noHistory);check(rejects([&]{ats::saveHistoryCsvCopy(noHistory,exportDirectory/L"empty.csv");}),"Missing source history exported an empty file silently");
+        const auto entries=ats::readHistoryEntries(root,&catalog);const auto oneFile=exportDirectory/L"Selected job.csv";
+        ats::saveHistoryCsvSelection(root,oneFile,&catalog,entries.front().id,entries.front().session);const auto oneRows=csv(bytes(oneFile));
+        check(oneRows.size()==2&&oneRows[1][14]==entries.front().id&&bytes(oneFile).rfind("\xEF\xBB\xBF",0)==0,"Selected-job CSV did not contain exactly one UTF-8 job row");
+        check(oneRows[1][4]==entries.front().pickupCompany&&oneRows[0]==csv(csvBefore)[0],"Selected export broke escaped depot labels or existing column format");
+        check(bytes(root/"job_history.json")==archivedBefore&&bytes(root/"job_history.csv")==csvBefore,"Selected export modified retained history");
+        const auto allFile=exportDirectory/L"All archived jobs.csv";ats::saveHistoryCsvSelection(root,allFile,&catalog);
+        check(csv(bytes(allFile)).size()==entries.size()+1,"Offline full-profile export omitted jobs");
+        check(rejects([&]{ats::saveHistoryCsvSelection(root,oneFile,&catalog,entries.front().id,live::uniqueId());})&&csv(bytes(oneFile))==oneRows,"Wrong-session export damaged an existing selected-job CSV");
         std::cout<<"PASS: "<<checks<<" history checks: completed-form scope, two-stop handover, CSV escaping, measured/missing weights, idempotency, durable retention, malformed archive protection and locked-file recovery.\n";return 0;
     }catch(const std::exception& ex){std::cerr<<"FAIL: "<<ex.what()<<'\n';return 1;}
 }

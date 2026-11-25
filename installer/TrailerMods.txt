@@ -1,0 +1,59 @@
+GT MULTI-TRAILER COMBINATIONS - Made by Grumpyman
+
+Included with Dispatch Companion 0.2.11:
+  ATS mod 1.1.3 - GT Multi-Trailer Combinations - ATS
+  ETS2 mod 1.1.1 - GT Multi-Trailer Combinations - ETS2
+These packages target game version 1.62. DLC-specific trailers require their
+matching DLC (for example, the Lode King Prestige hopper).
+
+INSTALL AND ENABLE
+1. Close the games normally. In Setup, select the plugins and trailer mods
+   for the games you use. You can uncheck the other game.
+2. For plugins, choose the main Steam game folders. For trailer mods, choose
+   each game's data folder containing config.cfg, normally under Documents.
+   If using OneDrive or -homedir, select the actual game data folder.
+3. Start the game. Before loading a profile, open that profile's Mod Manager.
+   Enable GT Multi-Trailer Combinations - ATS or - ETS2, then confirm changes.
+   If the same mod is already active, leave it enabled. Do not add another copy.
+4. Use the trailer dealer and Customize menus to buy the combination, attach
+   it in-game, then use Dispatch Companion with that owned combination.
+
+The Mod Manager names and filenames stay the same across updates:
+  GT_Tanker_Combinations_ATS.scs
+  GT_Tanker_Combinations_ETS2.scs
+Only the version changes. These older filenames now also cover normal trailers.
+Setup never enables mods in profiles or edits saves for you.
+
+TRAILER CHOICES
+Use the normal trailer family's Customize options for existing doubles and
+triples. Extra dealer cards are limited to six ATS combinations and four ETS2
+tanker doubles, avoiding duplicate entries for every length and axle choice.
+
+ATS: up to three cargo trailers, with converter dollies excluded.
+  GT Long Triple: box (dry van/insulated/reefer), flatbed/curtainsider, fuel,
+  food and container families, through the normal Triple configuration menu.
+  GT Road Train: three-axle curtainsiders (3 x 45 ft), fuel tanks (3 x 48 ft)
+  and reefers (3 x 53 ft). Choose Triple, then the GT Road Train configuration.
+  These road trains have two TWO-AXLE dollies. No three-axle dolly is included.
+  The game calls these Triple, rather than HCT. Stock pup triples also remain.
+ETS2: up to two cargo trailers, with converter dollies excluded.
+  Additional dealer doubles: fuel, gas, chrome food tanker and painted food
+  tanker. Use normal Customize choices for other supported trailer families.
+
+These are test builds. The newest ATS road-train menu choices and driving still
+need in-game verification. Try new combinations on a test profile first.
+
+UPDATING, BACKUPS AND REMOVAL
+Setup replaces the matching .scs file in place, after making a verified backup
+when its contents differ. Backups are outside the active mod folder:
+  <game data folder>\mod-backups\DispatchCompanion
+To roll back, close the game and copy the desired backup to the mod folder
+using its original .scs filename (remove the .<hash>.bak suffix).
+
+Uninstalling Dispatch Companion leaves the installed game mods and their
+backups in place: purchased trailers in your saves may still depend on them.
+Remove or sell dependent trailers before disabling/removing a mod yourself.
+Copies of both current mod archives are also available in the installed app's
+mods folder, even if you did not select automatic mod installation.
+
+Dispatch Companion is independent of SCS Software and is not endorsed by SCS.

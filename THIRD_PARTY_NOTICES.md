@@ -9,3 +9,8 @@
 Dispatch Companion is an independent project and is not endorsed by SCS
 Software. Game assets and executable files are not included in this source
 repository.
+
+The optional GT trailer mod archives distributed as release assets (and inside
+Setup) reference SCS game/DLC resources and include modified trailer resources.
+Their manifests credit SCS Software assets. The game and any corresponding DLC
+are required; the mods are not standalone replacements for the games.

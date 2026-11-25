@@ -85,19 +85,19 @@ public:
         for(HWND child=GetWindow(window,GW_CHILD);child;child=GetWindow(child,GW_HWNDNEXT)){
             wchar_t name[32]={};GetClassNameW(child,name,32);
             const bool isButton=_wcsicmp(name,L"Button")==0,isCombo=_wcsicmp(name,L"ComboBox")==0;
-            if(isButton){const auto style=GetWindowLongW(child,GWL_STYLE);SetWindowLongW(child,GWL_STYLE,(style&~BS_TYPEMASK)|BS_OWNERDRAW);}
+            if(isButton){const auto style=GetWindowLongW(child,GWL_STYLE);if((style&BS_TYPEMASK)!=BS_AUTOCHECKBOX)SetWindowLongW(child,GWL_STYLE,(style&~BS_TYPEMASK)|BS_OWNERDRAW);}
             if(isButton||isCombo){SetWindowSubclass(child,controlSkin,0x4754,reinterpret_cast<DWORD_PTR>(this));SetWindowTheme(child,L"",L"");}
             if(_wcsicmp(name,L"Edit")==0){SetWindowTheme(child,L"",L"");if(GetWindowLongW(child,GWL_STYLE)&ES_READONLY)SetWindowSubclass(child,controlSkin,0x4754,reinterpret_cast<DWORD_PTR>(this));}
         }
         RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_ERASE|RDW_ALLCHILDREN|RDW_FRAME);
     }
-    LRESULT color(HDC dc,bool input)const{SetTextColor(dc,foreground);SetBkColor(dc,input?surface:background);SetBkMode(dc,OPAQUE);return reinterpret_cast<LRESULT>(input?surfaceBrush:backgroundBrush);}
+    LRESULT color(HDC dc,bool input,bool disabled=false)const{SetTextColor(dc,disabled?muted:foreground);SetBkColor(dc,input?surface:background);SetBkMode(dc,OPAQUE);return reinterpret_cast<LRESULT>(input?surfaceBrush:backgroundBrush);}
     bool draw(const DRAWITEMSTRUCT& item)const{
         if(item.CtlType!=ODT_BUTTON&&item.CtlType!=ODT_COMBOBOX)return false;
         const bool disabled=(item.itemState&ODS_DISABLED)!=0,pressed=(item.itemState&ODS_SELECTED)!=0,hover=GetPropW(item.hwndItem,hoverProperty)!=nullptr;const int dpi=static_cast<int>(GetDpiForWindow(item.hwndItem));
         SetBkMode(item.hDC,TRANSPARENT);SelectObject(item.hDC,reinterpret_cast<HFONT>(SendMessageW(item.hwndItem,WM_GETFONT,0,0)));std::wstring caption;auto box=item.rcItem;
         if(item.CtlType==ODT_COMBOBOX){
-            const auto fill=CreateSolidBrush(pressed?selection:surface);FillRect(item.hDC,&box,fill);DeleteObject(fill);SetTextColor(item.hDC,disabled?muted:foreground);
+            const auto fill=CreateSolidBrush(pressed?selection:surface);FillRect(item.hDC,&box,fill);DeleteObject(fill);const bool protectedProfile=item.itemID!=static_cast<UINT>(-1)&&SendMessageW(item.hwndItem,CB_GETITEMDATA,item.itemID,0)==0x47545052;SetTextColor(item.hDC,disabled||protectedProfile?muted:foreground);
             if(item.itemID!=static_cast<UINT>(-1)){const auto length=SendMessageW(item.hwndItem,CB_GETLBTEXTLEN,item.itemID,0);if(length!=CB_ERR){caption.resize(static_cast<size_t>(length)+1);SendMessageW(item.hwndItem,CB_GETLBTEXT,item.itemID,reinterpret_cast<LPARAM>(caption.data()));caption.resize(static_cast<size_t>(length));}}
             box.left+=MulDiv(8,dpi,96);box.right-=MulDiv((item.itemState&ODS_COMBOBOXEDIT)?16:4,dpi,96);DrawTextW(item.hDC,caption.c_str(),-1,&box,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
         }else{

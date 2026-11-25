@@ -1,0 +1,83 @@
+#include "live_panel.h"
+#include <commctrl.h>
+#include <iostream>
+#include <stdexcept>
+
+struct LivePanelSelectionTest {
+    static void run(const std::filesystem::path& project) {
+        unsigned count=0;
+        auto check=[&](bool ok,const char* message){++count;if(!ok)throw std::runtime_error(message);};
+        const auto app=GetModuleHandleW(nullptr);
+        const auto parent=CreateWindowW(L"STATIC",L"Selection test",0,0,0,0,0,nullptr,nullptr,app,nullptr);
+        if(!parent)throw std::runtime_error("Cannot create isolated selection test window");
+        LivePanel panel(parent,app,project);
+        if(!panel.catalog)throw std::runtime_error("Selection test catalog failed");
+        auto& catalog=*panel.catalog;
+        catalog.positions={{"a",{0,0}},{"b",{10000,0}},{"c",{20000,0}},{"d",{0,20000}},{"e",{0,10000}}};
+        catalog.locations.clear();for(const auto& p:catalog.positions)catalog.locations[p.first]={"depot"};
+        catalog.outgoing={{"depot",{"wood"}}};catalog.incoming=catalog.outgoing;
+        catalog.cargo["wood"]={"Wood",{"curtainside"},1,1};
+        panel.body="curtainside";panel.online=true;panel.profileData=project;panel.setTwoStop(true);
+        panel.status={{"trailer",{{"connected",true},{"chain_type","single"},{"combination_known",true},{"trailer_count",1}}}};
+        panel.selected={"a","depot","wood","","","",""};panel.choices();panel.render();
+        check(IsWindowEnabled(panel.combos[3])&&IsWindowEnabled(panel.combos[5]),"Delivery cities are not independently enabled after cargo");
+        auto choose=[&](size_t field,const std::string& id){
+            const auto& list=panel.options[field];const auto found=std::find_if(list.begin(),list.end(),[&](const ats::Choice& c){return c.id==id;});
+            if(found==list.end())throw std::runtime_error("Test choice unavailable: "+id);
+            SendMessageW(panel.combos[field],CB_SETCURSEL,static_cast<WPARAM>(found-list.begin()),0);
+            panel.command(400+static_cast<int>(field),CBN_SELCHANGE);
+        };
+        choose(5,"c");check(panel.selected[3]=="b"&&panel.selected[4]=="depot","Final city did not choose an intermediate first city and company");
+        choose(6,"depot");choose(4,"depot");check(panel.selected[5]=="c"&&panel.selected[6]=="depot","First company change erased final delivery");
+        choose(5,"d");check(panel.selected[3]=="e"&&panel.selected[4]=="depot"&&panel.selected[6].empty(),"Changed final city retained an off-route stop or wrong company");
+        panel.selected={"a","depot","wood","","","",""};panel.choices();choose(3,"b");choose(4,"depot");
+        check(IsWindowEnabled(panel.combos[5]),"First-first selection prevented choosing final city");
+        choose(5,"c");check(panel.selected[3]=="b"&&panel.selected[4]=="depot","Final city discarded a first stop that still fits");
+        choose(6,"depot");choose(4,"depot");check(panel.selected[6]=="depot","Changing first company reset final company");
+        panel.selected.fill({});panel.status["truck_position"]={{"x",0},{"z",0}};
+        check(panel.defaultPickupCity()&&panel.selected[0]=="a","Current city did not default pickup");
+        panel.selected[0]="b";check(!panel.defaultPickupCity()&&panel.selected[0]=="b","Current city overwrote a manual selection");
+        panel.selected.fill({});panel.status["job"]={{"active",true}};check(!panel.defaultPickupCity()&&panel.selected[0].empty(),"Active job allowed pickup changes");
+        panel.status["job"]={{"active",false}};panel.status["truck_position"]=nullptr;check(!panel.defaultPickupCity(),"Unavailable position invented a pickup city");
+        panel.selected={"a","depot","wood","","","",""};panel.randomEngine.seed(42);panel.setRandom(true);
+        check(panel.selected[3].empty()&&panel.selected[4].empty(),"Random middle was picked before final city");
+        check(!IsWindowEnabled(panel.combos[3])&&!IsWindowEnabled(panel.combos[4])&&IsWindowEnabled(panel.combos[5]),"Random did not lock only the middle city/company");
+        check(!IsWindowEnabled(panel.labels[3])&&!IsWindowEnabled(panel.labels[4]),"Disabled middle-delivery labels were not muted");
+        choose(5,"c");check(panel.selected[3]=="b"&&panel.selected[4]=="depot","Random mode did not fill a compatible middle delivery");
+        const auto picked=panel.selected;panel.choices();panel.render();check(panel.selected==picked,"Routine refresh rerolled the random delivery");
+        choose(5,"d");check(panel.selected[3]=="e"&&panel.selected[4]=="depot","Random middle did not follow changed final city");
+        panel.setRandom(false);check(IsWindowEnabled(panel.combos[3])&&IsWindowEnabled(panel.combos[4])&&panel.selected[3]=="e","Unticking Random did not restore manual control and retain the stop");
+        check(IsWindowEnabled(panel.labels[3])&&IsWindowEnabled(panel.labels[4]),"Manual delivery labels remained disabled");
+        catalog.positions["f"]={12000,500};catalog.locations["f"]={"depot","other"};catalog.incoming["other"]={"wood"};
+        panel.selected={"a","depot","wood","b","depot","c","depot"};
+        std::set<std::string> seenCities,seenCompanies;
+        for(int n=0;n<64;++n){panel.setRandom(true);seenCities.insert(panel.selected[3]);seenCompanies.insert(panel.selected[4]);check(catalog.alongRoute("a",panel.selected[3],"c")&&catalog.valid(panel.route(),panel.body),"Random generated an invalid route");panel.setRandom(false);}
+        check(seenCities.size()==2&&seenCompanies.size()==2,"Random choice did not use multiple compatible cities and companies");
+        panel.status["job"]={{"active",true}};const auto activeSelection=panel.selected;panel.setRandom(true);check(panel.selected==activeSelection,"Random changed an active job's selections");
+        panel.status["job"]={{"active",false}};panel.setRandom(false);panel.lastId="saved-delivery";
+        const auto savedSelection=panel.selected;panel.setRandom(true);check(panel.selected==savedSelection,"Random changed a saved delivery before its result was loaded");
+        panel.lastId.clear();panel.setRandom(false);panel.setTwoStop(false);panel.setRandom(true);
+        check(IsWindowEnabled(panel.combos[3])&&IsWindowEnabled(panel.combos[4]),"Random preference disabled the single-job delivery fields");
+        int minimum=0,maximum=0;SendMessageW(panel.percentSpin,UDM_GETRANGE32,reinterpret_cast<WPARAM>(&minimum),reinterpret_cast<LPARAM>(&maximum));
+        check(minimum==1&&maximum==99&&reinterpret_cast<HWND>(SendMessageW(panel.percentSpin,UDM_GETBUDDY,0,0))==panel.percentEdit,"Percentage spinner range or buddy incorrect");
+        SendMessageW(panel.percentSpin,UDM_SETPOS32,0,50);SendMessageW(panel.percentEdit,WM_KEYDOWN,VK_UP,0);SendMessageW(panel.percentEdit,WM_KEYUP,VK_UP,0);
+        check(panel.remainingPercent()==51,"Percentage did not increase with the up arrow");
+        SendMessageW(panel.percentSpin,UDM_SETPOS32,0,99);SendMessageW(panel.percentEdit,WM_KEYDOWN,VK_UP,0);SendMessageW(panel.percentEdit,WM_KEYUP,VK_UP,0);
+        check(panel.remainingPercent()==99,"Percentage spinner exceeded maximum");
+        SendMessageW(panel.percentSpin,UDM_SETPOS32,0,1);SendMessageW(panel.percentEdit,WM_KEYDOWN,VK_DOWN,0);SendMessageW(panel.percentEdit,WM_KEYUP,VK_DOWN,0);
+        check(panel.remainingPercent()==1,"Percentage spinner fell below minimum");
+        panel.lastId=live::uniqueId();panel.lastSession="spinner-session";panel.status["session_id"]=panel.lastSession;panel.submitted=live::utcMs();panel.render();
+        check(!IsWindowEnabled(panel.percentEdit)&&!IsWindowEnabled(panel.percentSpin),"Pending dispatch did not lock both percentage controls");
+        panel.lastId.clear();panel.lastSession.clear();panel.submitted=0;panel.status=live::Json::object();
+        panel.status["trailer"]={{"connected",true},{"chain_type","single"},{"combination_known",true},{"trailer_count",3}};
+        panel.selected={"a","depot","wood","b","depot","c","depot"};panel.choices();
+        dispatchGame::select(false);panel.render();check(IsWindowEnabled(panel.combos[0]),"ATS triple did not enable route selection");
+        dispatchGame::select(true);panel.render();check(!IsWindowEnabled(panel.combos[0]),"ETS2 accepted a physical triple labelled single");
+        panel.status["trailer"]["trailer_count"]=2;panel.status["trailer"]["dolly_count"]=1;panel.render();check(IsWindowEnabled(panel.combos[0]),"ETS2 double plus dolly was rejected");
+        panel.status["trailer"]["combination_known"]=false;panel.render();check(!IsWindowEnabled(panel.combos[0]),"Unverified combination enabled route selection");
+        dispatchGame::select(false);panel.status["trailer"]["combination_known"]=true;panel.status["trailer"]["trailer_count"]=4;panel.render();check(!IsWindowEnabled(panel.combos[0]),"ATS accepted four trailers");
+        DestroyWindow(parent);
+        std::cout<<"PASS: "<<count<<" isolated selection checks: either city first, compatible automatic replacement and independent companies.\n";
+    }
+};
+int wmain(int argc,wchar_t** argv){try{if(argc!=2)throw std::runtime_error("Expected project path");LivePanelSelectionTest::run(argv[1]);return 0;}catch(const std::exception& e){std::cerr<<"FAIL: "<<e.what()<<'\n';return 1;}}

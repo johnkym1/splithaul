@@ -10,6 +10,9 @@ static uintptr_t ptr(std::vector<unsigned char>& bytes){return reinterpret_cast<
 static void require(bool value,const char* message){if(!value)throw std::runtime_error(message);}
 int main() {
     try {
+        scs_value_t placement={};placement.type=SCS_VALUE_TYPE_dplacement;placement.value_dplacement.position.x=123;placement.value_dplacement.position.z=456;
+        livePosition(nullptr,0,&placement,nullptr);require(lastPosition!=0&&truckX==123&&truckZ==456,"Read-only truck position callback failed");
+        livePosition(nullptr,0,nullptr,nullptr);require(lastPosition==0,"Unavailable truck position retained stale data");
         std::vector<unsigned char> image(0x3800000),economy(0x400),player(0x300),vehicles(0x100),owned(0x300),definition(0x100),root(0x3300),actor(0x100),ui(0x100),table(0x100),other(0x100),jobUnit(0x300);
         imageBase=ptr(image);require(selectHost(cancellationBuild.hash),"Cannot select pinned test host");
         require(activeCancellationBuild()!=nullptr,"Pinned cancellation build unavailable");

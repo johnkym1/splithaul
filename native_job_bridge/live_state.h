@@ -1,6 +1,7 @@
 #pragma once
 #include "../dispatch_shared/protocol.h"
 #include "../dispatch_shared/payload.h"
+#include "../dispatch_shared/trailer_combination.h"
 #include "scssdk_telemetry.h"
 
 namespace live {
@@ -29,8 +30,15 @@ struct Job {
 };
 struct Trailer {
     bool configured=false,connected=false;std::string id,body,chain;
+    TrailerCombination combination;
+    bool supported() const {return configured&&combination.supported();}
     void update(const scs_named_value_t* a) {configured=a&&a->name;id=attribute(a,"id");body=attribute(a,"body.type");chain=attribute(a,"chain.type");}
-    std::string signature() const {return configured&&!id.empty()&&!body.empty()&&!chain.empty()?id+"|"+body+"|"+chain:std::string();}
-    Json json() const {return {{"configured",configured},{"connected",connected},{"id",id},{"body_type",body},{"chain_type",chain},{"signature",signature()}};}
+    std::string signature() const {
+        const auto shape=combination.signature();if(!configured||shape.empty()||id.empty()||body.empty()||chain.empty())return {};
+        const auto base=id+"|"+body+"|"+chain;
+        // Preserve recovery of existing single-trailer jobs across this update.
+        return combination.parts.size()==1?base:base+"|"+shape;
+    }
+    Json json() const {return {{"configured",configured},{"connected",connected},{"id",id},{"body_type",body},{"chain_type",chain},{"signature",signature()},{"combination_known",combination.known},{"trailer_count",combination.trailers()},{"dolly_count",combination.dollies()},{"supported",supported()},{"trailer_limit",trailerLimit()}};}
 };
 }

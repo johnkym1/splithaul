@@ -1,5 +1,6 @@
 #include "ats_catalog.h"
 #include "dispatch_core.h"
+#include "city_positions.h"
 #include <algorithm>
 #include <fstream>
 #include <regex>
@@ -12,6 +13,7 @@ static std::string match(const std::string& value,const std::regex& pattern) {st
 static void sort(std::vector<Choice>& choices) {std::sort(choices.begin(),choices.end(),[](const Choice& a,const Choice& b){return a.label==b.label?a.id<b.id:a.label<b.label;});}
 static std::string name(const std::map<std::string,std::string>& names,const std::string& id) {const auto n=names.find(id);return n==names.end()?dispatch::displayToken(id):n->second;}
 Catalog::Catalog(const fs::path& project) {
+    positions=live::Json::parse(cityPositionsJson).at(dispatchGame::id).get<decltype(positions)>();
     const auto packed=project/"catalogs"/(std::string(dispatchGame::id)+".json");
     if(fs::exists(packed)){loadSnapshot(dispatch::readJson(packed));return;}
     std::vector<fs::path> roots;auto base=project/(dispatchGame::isETS2()?"game_data/ets2_def_current/def":"game_data/ats_def_current/def");if(dispatchGame::isETS2()&&!fs::is_directory(base))base=project/"game_data/base/def";if(!dispatchGame::isETS2()&&!fs::is_directory(base))base=project/"game_data/ats_def_route/def";if(fs::is_directory(base))roots.push_back(base);
@@ -53,13 +55,15 @@ Catalog::Catalog(const fs::path& project) {
 live::Json Catalog::snapshot() const {
     live::Json definitions=live::Json::object();
     for(const auto& item:cargo)definitions[item.first]={{"label",item.second.label},{"bodies",item.second.bodies},{"unit_kg",item.second.unitKg},{"unit_m3",item.second.unitM3}};
-    return {{"format",1},{"game",dispatchGame::id},{"cargo",definitions},{"city_names",cityNames},{"company_names",companyNames},{"locations",locations},{"outgoing",outgoing},{"incoming",incoming}};
+    return {{"format",1},{"game",dispatchGame::id},{"cargo",definitions},{"city_names",cityNames},{"company_names",companyNames},{"locations",locations},{"outgoing",outgoing},{"incoming",incoming},{"city_positions",positions}};
 }
 void Catalog::loadSnapshot(const live::Json& data) {
     if(!data.is_object()||data.at("format")!=1||data.at("game")!=dispatchGame::id)
         throw std::runtime_error("Packaged game catalog has the wrong format or game.");
     cityNames=data.at("city_names").get<decltype(cityNames)>();companyNames=data.at("company_names").get<decltype(companyNames)>();
     locations=data.at("locations").get<decltype(locations)>();outgoing=data.at("outgoing").get<decltype(outgoing)>();incoming=data.at("incoming").get<decltype(incoming)>();
+    if(data.contains("city_positions"))positions=data.at("city_positions").get<decltype(positions)>();
+    for(const auto& point:positions)if(!live::identifier(point.first)||!std::isfinite(point.second[0])||!std::isfinite(point.second[1]))throw std::runtime_error("Invalid city position in catalog.");
     for(const auto& item:data.at("cargo").items()) {
         const auto& value=item.value();Cargo entry;
         entry.label=value.at("label").get<std::string>();entry.bodies=value.at("bodies").get<std::set<std::string>>();
@@ -90,6 +94,29 @@ std::vector<Choice> Catalog::sourceCities(const std::string& body) const {
 }
 std::vector<Choice> Catalog::destinationCities(const std::string& selectedCargo) const {
     std::vector<Choice> result;for(const auto& city:locations)if(!companies(city.first,"",selectedCargo,false).empty())result.push_back({city.first,name(cityNames,city.first)});sort(result);return result;
+}
+bool Catalog::alongRoute(const std::string& source,const std::string& first,const std::string& final) const {
+    if(source==first||first==final||source==final||!positions.count(source)||!positions.count(first)||!positions.count(final))return false;
+    const auto& a=positions.at(source);const auto& b=positions.at(first);const auto& c=positions.at(final);
+    const double dx=c[0]-a[0],dz=c[1]-a[1],length=std::hypot(dx,dz);
+    if(length<2500)return false;
+    const double projection=((b[0]-a[0])*dx+(b[1]-a[1])*dz)/(length*length);
+    const double start=std::hypot(b[0]-a[0],b[1]-a[1]),end=std::hypot(c[0]-b[0],c[1]-b[1]);
+    return projection>0&&projection<1&&start>1500&&end>1500&&start+end-length<=(std::max)(6000.0,length*0.25);
+}
+std::vector<Choice> Catalog::firstStops(const std::string& selectedCargo,const std::string& source,const std::string& final) const {
+    auto result=destinationCities(selectedCargo);
+    result.erase(std::remove_if(result.begin(),result.end(),[&](const Choice& c){return c.id==source||!positions.count(c.id)||(!final.empty()&&!alongRoute(source,c.id,final));}),result.end());
+    if(!final.empty()&&positions.count(source)&&positions.count(final))std::stable_sort(result.begin(),result.end(),[&](const Choice& a,const Choice& b){
+        auto detour=[&](const std::string& id){const auto& p=positions.at(id);const auto& s=positions.at(source);const auto& f=positions.at(final);return std::hypot(p[0]-s[0],p[1]-s[1])+std::hypot(p[0]-f[0],p[1]-f[1]);};
+        return detour(a.id)<detour(b.id);
+    });return result;
+}
+std::string Catalog::nearbyCity(double x,double z) const {
+    if(!std::isfinite(x)||!std::isfinite(z))return {};
+    double nearest=3000;std::string result;
+    for(const auto& p:positions)if(locations.count(p.first)){const double distance=std::hypot(x-p.second[0],z-p.second[1]);if(distance<nearest){nearest=distance;result=p.first;}}
+    return result;
 }
 bool Catalog::valid(const live::Route& r,const std::string& body) const {
     const auto source=locations.find(r.sourceCity),target=locations.find(r.targetCity),out=outgoing.find(r.sourceCompany),in=incoming.find(r.targetCompany);

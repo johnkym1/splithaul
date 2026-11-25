@@ -69,6 +69,7 @@ std::string csvText(const std::string& value) {
     std::string quoted="\"";for(const auto c:text){if(c=='\"')quoted+='\"';quoted+=c;}return quoted+'\"';
 }
 namespace {
+constexpr char csvHeader[]="\xEF\xBB\xBF" "Completed / confirmed (UTC),Status,Cargo,Pickup city,Pickup company,Delivery city,Delivery company,Cargo weight (kg),Cargo units,Revenue,Distance (km),Cargo damage,Plan ID,Stop,Request ID,Completion source\r\n";
 std::string timestamp(uint64_t ms) {
     if(!ms||ms>253402300799999ULL)throw std::runtime_error("Invalid job completion timestamp.");
     ULARGE_INTEGER value;value.QuadPart=(ms+11644473600000ULL)*10000;FILETIME file={value.LowPart,value.HighPart};SYSTEMTIME time={};
@@ -170,7 +171,7 @@ HistoryExport exportJobHistory(const live::fs::path& project,const live::fs::pat
     }catch(const std::exception&){if(candidate.archived)throw std::runtime_error("A saved job history entry is invalid; the archive has not been overwritten.");}
     std::vector<Row> ordered;for(auto& item:rows)ordered.push_back(std::move(item.second));
     std::sort(ordered.begin(),ordered.end(),[](const Row& a,const Row& b){return std::tie(a.stamp,a.session,a.id)<std::tie(b.stamp,b.session,b.id);});
-    std::string data="\xEF\xBB\xBF" "Completed / confirmed (UTC),Status,Cargo,Pickup city,Pickup company,Delivery city,Delivery company,Cargo weight (kg),Cargo units,Revenue,Distance (km),Cargo damage,Plan ID,Stop,Request ID,Completion source\r\n";
+    std::string data=csvHeader;
     for(const auto& row:ordered)data+=row.line;
     live::Json archive={{"version",1},{"jobs",live::Json::array()}};for(const auto& record:records)archive["jobs"].push_back(record.second);
     if(archive!=previous)live::writeJson(archivePath,archive);
@@ -200,6 +201,21 @@ std::vector<HistoryEntry> readHistoryEntries(const live::fs::path& project,const
 }
 void saveHistoryCsvCopy(const live::fs::path& project,const live::fs::path& destination,bool profileScoped) {
     const auto data=readCsv(project/(profileScoped?"user.data":"job_history.csv"));if(data.empty())throw std::runtime_error("There is no generated history CSV to export. Refresh History and try again.");
+    writeCsv(destination,data);
+}
+void saveHistoryCsvSelection(const live::fs::path& profile,const live::fs::path& destination,const Catalog* catalog,const std::string& id,const std::string& session){
+    if(id.empty()!=session.empty()||(!id.empty()&&(!live::requestId(id)||!live::requestId(session))))throw std::runtime_error("Select a valid job to export.");
+    const auto output=live::fs::absolute(destination).lexically_normal();
+    for(const auto* name:{"job_history.json","settings.config","user.data"})if(output==live::fs::absolute(profile/name).lexically_normal())throw std::runtime_error("Choose a separate CSV file for your export.");
+    auto entries=readHistoryEntries(profile,catalog);std::string data=csvHeader;size_t count=0;
+    const auto optional=[](const std::optional<double>& value){return value?live::Json(*value).dump():std::string();};
+    // Match the established full-history CSV order and columns without updating
+    // archives or importing anything from the running game's bridge.
+    for(auto it=entries.rbegin();it!=entries.rend();++it){const auto& entry=*it;if(!id.empty()&&(entry.id!=id||entry.session!=session))continue;
+        const std::vector<std::string> cells={timestamp(entry.completedMs),entry.driverConfirmed?"delivered_user_confirmed":entry.outcome=="Cancelled"?"cancelled":"delivered",csvText(entry.cargo),csvText(entry.pickupCity),csvText(entry.pickupCompany),csvText(entry.deliveryCity),csvText(entry.deliveryCompany),optional(entry.massKg),entry.units?std::to_string(*entry.units):std::string(),optional(entry.revenue),optional(entry.distanceKm),optional(entry.damage),csvText(entry.plan),entry.stop?std::to_string(entry.stop):std::string(),entry.id,entry.driverConfirmed?"Driver confirmation":"Game telemetry"};
+        for(size_t i=0;i<cells.size();++i){if(i)data+=',';data+=cells[i];}data+="\r\n";++count;
+    }
+    if(!count)throw std::runtime_error(id.empty()?"There are no recorded jobs to export.":"The selected job is no longer in this profile's history. Refresh and select it again.");
     writeCsv(destination,data);
 }
 }

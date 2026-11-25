@@ -1,0 +1,14 @@
+[
+  {
+    "game": "ats",
+    "filename": "GT_Tanker_Combinations_ATS.scs",
+    "version": "1.1.3",
+    "sha256": "f50d97950ede72c4a3e6e93d59fef9b08977013715adcd434ac26bac63d177f4"
+  },
+  {
+    "game": "ets2",
+    "filename": "GT_Tanker_Combinations_ETS2.scs",
+    "version": "1.1.1",
+    "sha256": "08a247844646fcb30d65a9c34c0db7d97cf3d7410273c75c53832f7248cbbd4a"
+  }
+]

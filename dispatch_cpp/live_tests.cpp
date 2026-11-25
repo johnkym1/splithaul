@@ -188,6 +188,17 @@ int wmain(int argc,wchar_t** argv) {
         job.update(attributes);check(!job.payloadKnown&&!job.payloadMatches(21,522.1),"Missing SDK payload retained previous cargo quantities");
         job.update(nullptr);check(!job.active&&!job.matches(r.route)&&!job.payloadKnown,"Ended job remained active");
         ats::Catalog catalog(project);check(catalog.locations.size()>100,"ATS map catalog incomplete");check(catalog.locations.count("yakima")&&catalog.locations.at("yakima").count("bn_farm"),"Washington pickup depot missing");
+        check(catalog.positions.count("yakima")!=0,"Pickup city map coordinates missing");
+        const auto yakima=catalog.positions.at("yakima");
+        check(catalog.nearbyCity(yakima[0],yakima[1])=="yakima","Truck position did not match its current city");
+        check(catalog.nearbyCity(1e9,1e9).empty(),"Remote truck position invented a current city");
+        auto geometry=catalog;geometry.positions={{"a",{0,0}},{"b",{10000,0}},{"c",{20000,0}},{"behind",{-10000,0}},{"beyond",{30000,0}},{"detour",{10000,20000}}};
+        check(geometry.alongRoute("a","b","c"),"Intermediate stop on route was rejected");
+        check(!geometry.alongRoute("a","behind","c")&&!geometry.alongRoute("a","beyond","c")&&!geometry.alongRoute("a","detour","c"),"Backtracking or excessive detour accepted");
+        check(!geometry.alongRoute("a","a","c")&&!geometry.alongRoute("a","c","c")&&!geometry.alongRoute("a","missing","c"),"Duplicate or unmapped delivery city accepted");
+        geometry.locations={{"a",{"depot"}},{"b",{"depot"}},{"c",{"depot"}},{"detour",{"depot"}}};geometry.incoming={{"depot",{"wood"}}};
+        const auto stops=geometry.firstStops("wood","a","c");check(stops.size()==1&&stops[0].id=="b","First-stop choices did not follow selected final city");
+        check(geometry.firstStops("incompatible","a","c").empty(),"First-stop choices ignored cargo compatibility");
         check(catalog.compatible("dry_milk","curtainside"),"Curtainsider-compatible cargo rejected");check(!catalog.compatible("dry_milk","tanker"),"Incompatible tanker cargo offered");
         check(std::fabs(catalog.cargo.at("battery").unitKg-522.1)<0.01&&std::fabs(catalog.cargo.at("battery").unitM3-2.6)<0.01,"Cargo unit mass/volume catalog parsing failed");
         check(catalog.valid(r.route,"curtainside"),"Chosen test route is not supplied/accepted by these companies");

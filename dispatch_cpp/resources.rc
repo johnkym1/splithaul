@@ -1,5 +1,6 @@
 #include <windows.h>
 #include "app_version.h"
+1 ICON "assets\\grumpyman.ico"
 101 RCDATA "assets\\grumpyman.png"
 
 1 VERSIONINFO

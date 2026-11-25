@@ -33,9 +33,25 @@ cl %compilerFlags% /I ..\native_job_bridge\vendor\scs_sdk_1_16\include live_test
 if errorlevel 1 exit /b 1
 %buildOutput%\live_tests.exe "%~dp0.." "%~dp0%buildOutput%\live-test-data"
 if errorlevel 1 exit /b 1
+cl %compilerFlags% selection_tests.cpp %buildOutput%\dispatch_core.obj %buildOutput%\ats_catalog.obj %buildOutput%\job_history.obj %buildOutput%\live_panel.obj /Fo:%buildOutput%\selection_tests.obj /Fe:%buildOutput%\selection_tests.exe /link user32.lib gdi32.lib comctl32.lib shell32.lib bcrypt.lib ole32.lib /INCREMENTAL:NO
+if errorlevel 1 exit /b 1
+%buildOutput%\selection_tests.exe "%~dp0.."
+if errorlevel 1 exit /b 1
+cl %compilerFlags% profile_manager_tests.cpp /Fo:%buildOutput%\profile_manager_tests.obj /Fe:%buildOutput%\profile_manager_tests.exe /link user32.lib comctl32.lib bcrypt.lib shell32.lib ole32.lib /INCREMENTAL:NO
+if errorlevel 1 exit /b 1
+%buildOutput%\profile_manager_tests.exe "%~dp0%buildOutput%\profile-manager-data"
+if errorlevel 1 exit /b 1
+cl %compilerFlags% update_check_tests.cpp /Fo:%buildOutput%\update_check_tests.obj /Fe:%buildOutput%\update_check_tests.exe /link /INCREMENTAL:NO
+if errorlevel 1 exit /b 1
+%buildOutput%\update_check_tests.exe
+if errorlevel 1 exit /b 1
 cl %compilerFlags% history_tests.cpp %buildOutput%\dispatch_core.obj %buildOutput%\ats_catalog.obj %buildOutput%\job_history.obj /Fo:%buildOutput%\history_tests.obj /Fe:%buildOutput%\history_tests.exe /link bcrypt.lib /INCREMENTAL:NO
 if errorlevel 1 exit /b 1
 %buildOutput%\history_tests.exe "%~dp0.." "%~dp0%buildOutput%\history-test-data"
+if errorlevel 1 exit /b 1
+cl %compilerFlags% history_browse_tests.cpp %buildOutput%\dispatch_core.obj %buildOutput%\ats_catalog.obj %buildOutput%\job_history.obj %buildOutput%\history_page.obj /Fo:%buildOutput%\history_browse_tests.obj /Fe:%buildOutput%\history_browse_tests.exe /link user32.lib gdi32.lib comctl32.lib shell32.lib bcrypt.lib gdiplus.lib ole32.lib dwmapi.lib uxtheme.lib uuid.lib /INCREMENTAL:NO
+if errorlevel 1 exit /b 1
+%buildOutput%\history_browse_tests.exe "%~dp0%buildOutput%\history-browse-data"
 if errorlevel 1 exit /b 1
 cl %compilerFlags% history_export.cpp %buildOutput%\dispatch_core.obj %buildOutput%\ats_catalog.obj %buildOutput%\job_history.obj /Fo:%buildOutput%\history_export.obj /Fe:%buildOutput%\HistoryExport.exe /link bcrypt.lib /INCREMENTAL:NO
 if errorlevel 1 exit /b 1

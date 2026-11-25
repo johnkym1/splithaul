@@ -3,6 +3,7 @@
 #include "ats_catalog.h"
 #include <array>
 #include <memory>
+#include <random>
 
 class LivePanel {
 public:
@@ -17,17 +18,19 @@ public:
     void tick();
     void reviewRestart();
     void setTwoStop(bool value);
+    void setRandom(bool value);
     bool shouldWarnOnClose() const;
     bool connectedGameExited() const {return connectedDuringRun&&gameClosed;}
     std::filesystem::path activeProfileData() const {return profileData;}
 private:
+    friend struct LivePanelSelectionTest;
     HWND parent;HINSTANCE instance;std::filesystem::path project,bridge,profileData;
     std::unique_ptr<ats::Catalog> catalog;
     std::array<HWND,7> labels{},combos{};
     std::array<std::vector<ats::Choice>,7> options;
     std::array<std::string,7> selected{};
     HWND trailerText=nullptr,help=nullptr,dispatchButton=nullptr,acknowledgeButton=nullptr,cancelButton=nullptr,cancelTooltip=nullptr,statusText=nullptr,jobText=nullptr;
-    HWND percentLabel=nullptr,percentEdit=nullptr;
+    HWND percentLabel=nullptr,percentEdit=nullptr,percentSpin=nullptr;
     live::Json status=live::Json::object(),result=live::Json::object(),plan=live::Json::object(),observedGame=live::Json::object();
     std::string lastId,lastSession,body,signature,catalogError,sendError,offlineReason,formClearedId,historyError,historyReceipt,reviewedSession;
     std::string displayedProfile;
@@ -36,11 +39,14 @@ private:
     uint64_t submitted=0,observedGameCreated=0;
     bool gameClosed=false,reviewPromptPosted=false,connectedDuringRun=false;
     bool visible=false,syncing=false,online=false,twoStop=false,savedPlan=false;
+    bool randomMiddle=false;
+    std::mt19937 randomEngine{std::random_device{}()};
     unsigned savedPercent=50;
     size_t historyRows=0;
     uint64_t lastHistorySync=0,lastResumeAttempt=0;
     void loadProfile(const std::string& name);
     void choices();
+    bool defaultPickupCity();
     void render();
     live::Route route() const;
     live::Route finalRoute() const;

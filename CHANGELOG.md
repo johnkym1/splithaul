@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.2.11 — test pre-release, 25 November 2026
+
+- Bundle the app, ATS/ETS2 telemetry plugins and both trailer mods in one
+  installer, with separate optional tasks and data-folder selection.
+- Preserve mod filenames and Mod Manager names across updates. Back up replaced
+  mods outside the active mod directory; retain game mods on app uninstall.
+- Include ATS mod 1.1.3 and ETS2 mod 1.1.1. Add ATS long triples and three-axle
+  curtainsider, fuel and reefer road trains with two-axle dollies, and ETS2
+  fuel, gas and food tanker doubles. Keep dealer cards limited to new choices.
+- Accept attached owned combinations up to three cargo trailers in ATS or two
+  in ETS2, excluding recognised converter dollies.
+- Include history browsing/export improvements, profile-data management,
+  selection/UI updates and manual update checking from local 0.2.9/0.2.10 work.
+- Pass 517 app checks, both plugin suites (21 combination checks each), 1,061
+  catalog/storage checks, 8 installer plugin checks, 13 mod installer checks
+  and 47 isolated bundle integration checks. Verify both mod archives.
+
+Newest ATS road-train menu/visual/driving tests, real elevated installation and
+second-PC acceptance remain pending. This is an unsigned test build for exact
+supported game executables; trailer mods target 1.62 and require matching DLC
+where applicable.
+
 ## 0.2.8 — test pre-release, 23 November 2026
 
 - Select the sole running ATS or ETS2 game automatically when the app opens,
