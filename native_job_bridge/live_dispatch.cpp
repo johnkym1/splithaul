@@ -92,10 +92,14 @@ static Json capacityJson(const Objects& o) {
     live::TrailerCapacity cap;if(!trailerCapacity(o,cap))return {{"available",false}};
     return {{"available",true},{"gross_limit_kg",cap.grossKg},{"chassis_mass_kg",cap.chassisKg},{"body_mass_kg",cap.bodyKg},{"payload_ceiling_kg",cap.payloadKg()},{"volume_m3",cap.volumeM3},{"axles",cap.axles}};
 }
-static uint32_t maximumForRoute(const Objects& o,float& unitKg) {
+static uint32_t maximumForRoute(const Objects& o,float& unitKg,bool fullCapacity=false) {
     live::TrailerCapacity cap;float unitVolume=0;
     if(!capacityCodeMatches()||!trailerCapacity(o,cap)||!readMemory(o.cargo+0x9c,&unitKg,4)||!readMemory(o.cargo+0x98,&unitVolume,4))return 0;
     const auto geometricMaximum=cap.maximumUnits(unitKg,unitVolume);if(!geometricMaximum)return 0;
+    // Explicit per-request simulation option. Respect the whole combination's
+    // own gross/tare and volume limits, without applying country road limits.
+    // The policy is stored with the plan so a restart or handoff cannot change it.
+    if(fullCapacity)return geometricMaximum;
     const auto sourceCity=nativeCompanyCity(o.source),targetCity=nativeCompanyCity(o.target);
     NativeCapacityRequest request;request.economy=o.economy;request.definition=o.definition;request.cargo=o.cargo;
     if(!liveUnit(sourceCity)||!liveUnit(targetCity)||!word(sourceCity+0x160,request.sourceCountry)||!liveUnit(request.sourceCountry)||!word(targetCity+0x160,request.targetCountry)||!liveUnit(request.targetCountry))return 0;
@@ -161,6 +165,7 @@ static void setState(const std::string& next) {if(state==next)return;state=next;
 static void saveChain() {if(chain.enabled())live::writeJson(folder/"plans"/(chain.first.id+".json"),chain.json(session));}
 static void result(const live::Request& r,const std::string& phase,const std::string& message,const Json& extra=Json::object()) {
     Json value={{"protocol",live::protocolVersion},{"request_id",r.id},{"session_id",resumedTracking?r.session:session},{"state",phase},{"message",message},{"updated_utc_ms",live::utcMs()},{"route",live::routeJson(r.route)},{"job",job.json()}};
+    value["load_policy"]=r.fullCapacity?"trailer_capacity":"maximum_whole_units";
     if(resumedTracking)value["observed_session_id"]=session;
     if(r.id==working.id)value["payload"]={{"expected_units",expectedUnits},{"unit_mass_kg",expectedUnitKg},{"expected_mass_kg",double(expectedUnits)*expectedUnitKg},{"route_maximum_units",routeMaximumUnits}};
     value["details"]=extra;live::writeJson(folder/"results"/(r.id+".json"),value);lastId=r.id;lastProgress=phase;
@@ -207,7 +212,7 @@ static void publish() {
 #endif
     const bool canQueue=!cancellationInFlight&&!disabled&&!chain.active()&&!awaiting&&!monitoring&&!job.active&&!carActive&&!busActive&&jobSeen&&carSeen&&busSeen&&trailer.connected&&trailer.supported()&&!trailer.signature().empty()&&world&&!fs::exists(folder/"request.json");
     Json value={{"protocol",live::protocolVersion},{"game",dispatchGame::id},{"online",true},{"pid",GetCurrentProcessId()},{"session_id",session},{"updated_utc_ms",live::utcMs()},{"state",state},{"context_id",token},{"can_queue",canQueue},{"disabled",disabled},{"driving",driving},{"trailer",trailer.json()},{"job",job.json()},{"last_request_id",lastId},{"last_progress",lastProgress},{"awaiting_confirmation",awaiting},{"host_sha256",activeHostHash?activeHostHash:""},{"plugin","GT_Telemetry.dll"}};
-    value["build_id"]=dispatchGame::build;value["resumed_monitoring"]=resumedTracking&&monitoring;value["app_launcher"]=appHotkey::status();value["navigation"]=navigationStatus();value["trailer_capacity"]=world?capacityJson(o):Json{{"available",false}};if(chain.enabled())value["plan"]=chain.json(session);
+    value["full_capacity_supported"]=true;value["build_id"]=dispatchGame::build;value["resumed_monitoring"]=resumedTracking&&monitoring;value["app_launcher"]=appHotkey::status();value["navigation"]=navigationStatus();value["trailer_capacity"]=world?capacityJson(o):Json{{"available",false}};if(chain.enabled())value["plan"]=chain.json(session);
     value["menu_snapshot"]={{"captured",menuSnapshot.captured},{"speed_mps",menuSnapshot.speedKnown?Json(menuSnapshot.speedMps):Json(nullptr)},{"stopped",menuSnapshot.stopped()},{"ignition_on",menuSnapshot.ignitionKnown?Json(menuSnapshot.ignitionOn):Json(nullptr)}};
 #ifdef GT_ENABLE_EXPERIMENTAL_CANCELLATION
     value["experimental_cancel_available"]=!disabled&&!nativeFault&&cancellationCodeMatches();
@@ -228,7 +233,7 @@ static void executeClaimed(uintptr_t registry,const live::Request& r,bool carrie
     if(reason){result(r,"rejected",reason);return;}
     if(r.twoStop){Objects finalObjects;reason=findObjects(finalObjects,r.finalRoute);if(reason){result(r,"rejected",std::string("Final delivery: ")+reason);return;}}
     if(context(o)!=r.context||trailer.signature()!=r.trailer){result(r,"rejected","The selected vehicle, trailer combination or profile changed.");return;}
-    routeMaximumUnits=maximumForRoute(o,expectedUnitKg);
+    routeMaximumUnits=maximumForRoute(o,expectedUnitKg,r.fullCapacity);
     if(!routeMaximumUnits){result(r,"rejected","The maximum cargo load could not be verified for this trailer and route.");return;}
     expectedUnits=carried?chain.carriedUnits():routeMaximumUnits;
     if(!expectedUnits||expectedUnits>routeMaximumUnits||(carried&&std::fabs(chain.unitMassKg-expectedUnitKg)>0.01)){result(r,"rejected","The planned remaining cargo no longer fits this route or cargo definition.");return;}
@@ -237,7 +242,7 @@ static void executeClaimed(uintptr_t registry,const live::Request& r,bool carrie
             live::multiDropRemaining(expectedUnits,static_cast<unsigned>(r.dropRoutes.size()),0);
             for(size_t i=1;i<r.dropRoutes.size();++i) {
                 Objects drop;reason=findObjects(drop,r.dropRoutes[i]);float unitKg=0;
-                const auto maximum=reason?0:maximumForRoute(drop,unitKg);
+                const auto maximum=reason?0:maximumForRoute(drop,unitKg,r.fullCapacity);
                 const auto remaining=live::multiDropRemaining(expectedUnits,static_cast<unsigned>(r.dropRoutes.size()),static_cast<unsigned>(i));
                 if(!maximum||remaining>maximum||std::fabs(unitKg-expectedUnitKg)>0.01)throw std::runtime_error("Delivery "+std::to_string(i+1)+": the remaining cargo does not fit, or the depot is unavailable.");
             }
@@ -245,7 +250,7 @@ static void executeClaimed(uintptr_t registry,const live::Request& r,bool carrie
         }catch(const std::exception& ex){result(r,"rejected",ex.what());return;}
     } else if(r.twoStop) {
         Objects finalObjects;reason=findObjects(finalObjects,r.finalRoute);float finalUnitKg=0;
-        const auto finalMaximum=reason?0:maximumForRoute(finalObjects,finalUnitKg);
+        const auto finalMaximum=reason?0:maximumForRoute(finalObjects,finalUnitKg,r.fullCapacity);
         try {chain.firstUnits=expectedUnits;chain.finalUnits=live::remainingUnits(expectedUnits,r.remainingPercent);chain.unitMassKg=expectedUnitKg;}
         catch(const std::exception& e){result(r,"rejected",e.what());return;}
         if(!finalMaximum||chain.finalUnits>finalMaximum||std::fabs(finalUnitKg-expectedUnitKg)>0.01){result(r,"rejected","The remaining cargo portion does not fit the final route. Choose a smaller percentage or another depot.");return;}
@@ -277,7 +282,7 @@ static void tryHandoff(uintptr_t registry) {
     bool empty=!job.active&&!awaiting&&!monitoring;
     for(uintptr_t off=0x28;off<=0x38;off+=8){uintptr_t active=0;empty=empty&&word(o.player+off,active)&&!active;}
     if(!chain.canHandoff(empty,same,ready)){if(!chain.active())saveChain();return;}
-    live::Request next;next.id=chain.nextId();next.route=chain.nextRoute();next.session=session;next.context=chain.first.context;next.trailer=chain.first.trailer;next.created=live::utcMs();next.expires=next.created+120000;
+    live::Request next=chain.handoffRequest(session,live::utcMs());
     // No incoming file exists for an internal handover. Reserve the second ID
     // durably without replacement before either native mutation.
     auto claimed=live::requestJson(next);claimed["handoff_from"]=chain.first.id;

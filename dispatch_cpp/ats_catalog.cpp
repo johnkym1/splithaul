@@ -117,10 +117,10 @@ std::vector<Choice> Catalog::firstStops(const std::string& selectedCargo,const s
         return detour(a.id)<detour(b.id);
     });return result;
 }
-std::string Catalog::nearbyCity(double x,double z) const {
+std::string Catalog::nearbyCity(double x,double z,const std::string& pickupBody) const {
     if(!std::isfinite(x)||!std::isfinite(z))return {};
     double nearest=3000;std::string result;
-    for(const auto& p:positions)if(locations.count(p.first)){const double distance=std::hypot(x-p.second[0],z-p.second[1]);if(distance<nearest){nearest=distance;result=p.first;}}
+    for(const auto& p:positions)if(locations.count(p.first)){const double distance=std::hypot(x-p.second[0],z-p.second[1]);if(distance<nearest&&(pickupBody.empty()||!companies(p.first,pickupBody,"",true).empty())){nearest=distance;result=p.first;}}
     return result;
 }
 bool Catalog::valid(const live::Route& r,const std::string& body) const {

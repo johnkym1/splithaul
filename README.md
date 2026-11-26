@@ -5,16 +5,13 @@ A Windows dispatch app for single-player **American Truck Simulator** and
 trailer combination, split the original cargo across deliveries, and keep an
 exportable job history.
 
-**[Download SplitHaul 0.3.1 for Windows](https://github.com/johnkym1/splithaul/releases/download/v0.3.1/SplitHaul-Setup-0.3.1-win64.exe)**
+**[Download SplitHaul 0.3.4 for Windows](https://github.com/johnkym1/splithaul/releases/download/v0.3.4/SplitHaul-Setup-0.3.4-win64.exe)**
 
-[Release notes and SHA-256 checksum](https://github.com/johnkym1/splithaul/releases/tag/v0.3.1)
+[Release notes and SHA-256 checksum](https://github.com/johnkym1/splithaul/releases/tag/v0.3.4)
 
 This is an unsigned test pre-release. Setup bundles the app, both game plugins,
-ATS trailer mod 1.1.5 and ETS2 trailer mod 1.1.3. The green **Code** button
+ATS trailer mod 1.1.5 and ETS2 trailer mod 1.1.6. The green **Code** button
 downloads source code; use the installer link to install the app.
-
-Both trailer mods include SplitHaul tanker artwork and the project website in
-their Mod Manager descriptions. Trailer configurations are unchanged.
 
 ## Upgrading from Dispatch Companion
 
@@ -53,6 +50,20 @@ subject to route and cargo availability. All trailers stay attached. There are
 no additional pickups. Capacity comes from the complete combination reported by
 the game; it is not an assumed tonnes-per-trailer allowance.
 
+## Full trailer loads
+
+Enable **Options > Full trailer loads** for new SplitHaul jobs to use the
+attached combination's own weight and volume capacity instead of country
+road-weight limits. The option is off by default and saved per profile.
+Existing jobs and ordinary Cargo Market offers are unchanged. Update both
+the app and the selected game plugin before using it.
+
+For the tested fuel-double definition, diesel capacity is 60 whole units
+(51 tonnes). Actual capacity depends on the attached trailer definition and
+cargo; the app does not multiply a single-trailer load by trailer count.
+The capacity calculation is tested; loading and driving still need in-game
+verification.
+
 ## Distance, round trips and DLC
 
 **Preferred km** is saved separately for ATS and ETS2. Set it to **0** for a direct
@@ -76,7 +87,11 @@ The optional archives are `GT_Tanker_Combinations_ATS.scs` and
 `GT_Tanker_Combinations_ETS2.scs`. Keep the existing **GT Multi-Trailer
 Combinations - ATS/ETS2** Mod Manager entries enabled rather than adding duplicates.
 ATS includes long triples and three-axle road trains for curtainsiders, fuel
-and reefers, using two-axle dollies. ETS2 includes fuel, gas and food tanker doubles.
+and reefers, using two-axle dollies. ETS2 includes fuel, gas and food tanker doubles,
+plus HCT freezer combinations for Schmitz, Tirsan, Schwarzmuller, Kogel and Krone
+through normal Customize options. Each brand requires its matching DLC.
+The four newer brand hitch accessory definitions are corrected in ETS2 mod 1.1.6;
+visual alignment and driving need further in-game testing.
 
 Setup backs up replaced plugins and mods. Mods remain on app uninstall because
 purchased trailers may depend on them. See the [driver guide](installer/DriverGuide.txt)

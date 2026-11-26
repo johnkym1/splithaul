@@ -49,6 +49,7 @@ struct Request {
     std::string id,session,context,trailer;
     uint64_t created=0,expires=0;
     bool twoStop=false;
+    bool fullCapacity=false;
     Route finalRoute;
     std::string secondId;
     unsigned remainingPercent=50;
@@ -59,7 +60,7 @@ struct Request {
 };
 inline Json requestJson(const Request& r) {
     Json j={{"protocol",protocolVersion},{"game",dispatchGame::id},{"request_id",r.id},{"session_id",r.session},{"context_id",r.context},{"trailer_signature",r.trailer},{"created_utc_ms",r.created},{"expires_utc_ms",r.expires},{"route",routeJson(r.route)}};
-    j["load_policy"]="maximum_whole_units";
+    j["load_policy"]=r.fullCapacity?"trailer_capacity":"maximum_whole_units";
     if(r.twoStop)j["continuation"]={{"request_id",r.secondId},{"route",routeJson(r.finalRoute)},{"remaining_percent",r.remainingPercent}};
     if(r.multiDrop()) {
         j.erase("continuation");j["drops"]=Json::array();j["split_policy"]="equal_whole_units";
@@ -69,8 +70,8 @@ inline Json requestJson(const Request& r) {
 }
 inline Request parseRequest(const Json& j) {
     if(j.at("protocol")!=protocolVersion||j.at("game")!=dispatchGame::id)throw std::runtime_error("Unsupported dispatch protocol or game.");
-    if(j.at("load_policy")!="maximum_whole_units")throw std::runtime_error("Unsupported cargo load policy.");
-    Request r;r.route=parseRoute(j.at("route"));r.id=j.at("request_id").get<std::string>();r.session=j.at("session_id").get<std::string>();r.context=j.at("context_id").get<std::string>();r.trailer=j.at("trailer_signature").get<std::string>();r.created=j.at("created_utc_ms").get<uint64_t>();r.expires=j.at("expires_utc_ms").get<uint64_t>();
+    if(j.at("load_policy")!="maximum_whole_units"&&j.at("load_policy")!="trailer_capacity")throw std::runtime_error("Unsupported cargo load policy.");
+    Request r;r.fullCapacity=j.at("load_policy")=="trailer_capacity";r.route=parseRoute(j.at("route"));r.id=j.at("request_id").get<std::string>();r.session=j.at("session_id").get<std::string>();r.context=j.at("context_id").get<std::string>();r.trailer=j.at("trailer_signature").get<std::string>();r.created=j.at("created_utc_ms").get<uint64_t>();r.expires=j.at("expires_utc_ms").get<uint64_t>();
     if(!r.route.valid()||!requestId(r.id)||!requestId(r.session)||r.context.empty()||r.context.size()>160||r.trailer.empty()||r.trailer.size()>512||r.expires<=r.created||r.expires-r.created>120000)throw std::runtime_error("Invalid dispatch request fields.");
     if(j.contains("continuation")) {
         const auto& next=j.at("continuation");r.twoStop=true;r.secondId=next.at("request_id").get<std::string>();r.finalRoute=parseRoute(next.at("route"));

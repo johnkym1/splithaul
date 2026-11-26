@@ -73,6 +73,15 @@ Counts are limited to compatible stops and whole cargo units. Manual routes
 must also fit the distance. If fewer than three deliveries fit, increase the
 distance, change cargo/destination, or choose Single/Dual.
 
+FULL TRAILER LOADS
+Options > Full trailer loads lets new SplitHaul jobs use the attached
+combination's own payload and volume capacity instead of country road-weight
+limits. It is off by default and saved separately for each profile. Update
+the app and game plugin together. Existing jobs and ordinary Cargo Market
+offers are unchanged. Each delivery handover retains its original load policy.
+The fuel-double diesel calculation is 60 units / 51 tonnes; in-game loading
+and driving still need testing. Other combinations depend on their definitions.
+
 DLC FILTERING (ATS AND ETS2)
 City and depot choices automatically use packages mounted by the running game.
 Start the chosen game and load your profile to refresh the list. Merely having

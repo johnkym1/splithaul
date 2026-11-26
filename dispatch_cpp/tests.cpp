@@ -67,6 +67,9 @@ int wmain(int argc,wchar_t** argv) {
         m.save(sample());
         const auto optionsCase=isolated/("options-"+std::to_string(std::chrono::high_resolution_clock::now().time_since_epoch().count()));fs::create_directories(optionsCase);
         const auto defaultOptions=loadOptions(optionsCase);check(defaultOptions.mode==0&&!defaultOptions.dark,"Default app options changed unexpectedly");
+        check(!defaultOptions.fullCapacity&&!decodeOptions(Json{{"mode",2}}).fullCapacity,"Existing settings unexpectedly bypassed route limits");
+        saveOptions(optionsCase,{2,false,false,true});check(loadOptions(optionsCase).fullCapacity,"Full trailer load preference was not saved");
+        rejected=false;try{decodeOptions(Json{{"full_trailer_loads","yes"}});}catch(const std::exception&){rejected=true;}check(rejected,"Malformed load preference accepted");
         saveOptions(optionsCase,{1,true});const auto restoredOptions=loadOptions(optionsCase);check(restoredOptions.mode==1&&restoredOptions.dark,"Theme and dispatch mode did not survive reopening");
         check(modeForRunningGame(0,RunningGames::ets2)==2&&modeForRunningGame(1,RunningGames::ets2)==2,"ETS2 did not replace an ATS selection with ETS single");
         check(modeForRunningGame(2,RunningGames::ets2)==2&&modeForRunningGame(3,RunningGames::ets2)==3,"ETS2 did not keep its selected job type");

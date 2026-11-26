@@ -21,10 +21,12 @@ public:
     void setTwoStop(bool value);
     void setMultiDrop(bool value);
     void setRandom(bool value);
+    void setFullCapacity(bool value){fullCapacity=value;}
     bool shouldWarnOnClose() const;
     bool connectedGameExited() const {return connectedDuringRun&&gameClosed;}
     std::filesystem::path activeProfileData() const {return profileData;}
 private:
+    bool fullCapacity=false;
     friend struct LivePanelSelectionTest;
     HWND parent;HINSTANCE instance;std::filesystem::path project,bridge,profileData;
     std::unique_ptr<ats::Catalog> catalog;

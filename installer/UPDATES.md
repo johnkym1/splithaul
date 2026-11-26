@@ -57,13 +57,17 @@ can be retried; it does not claim the installed version is current.
 
 ## Current package
 
-The all-in-one release is 0.3.1, including ATS mod 1.1.5 and ETS2 mod 1.1.3.
-Both mods include SplitHaul artwork and the plain-text project website.
+The all-in-one release is 0.3.4, including ATS mod 1.1.5 and ETS2 mod 1.1.6.
+It includes full trailer loads, compatible automatic pickup-city selection,
+and branded ETS2 HCT freezer combinations with corrected hitch accessories.
 The app, catalogs, both game plugins and both mod archives are bundled. Optional
 mod tasks install to the chosen game data folders, with verified backups.
 Mods must be enabled manually in each profile and remain after app uninstall.
 The Mod Manager names and GT_Tanker_Combinations_*.scs filenames are stable.
-Trailer resources and dispatch behavior are unchanged from 0.3.0.
+
+Local builds 0.3.2 and 0.3.3 were not published. Version 0.3.4 lets those builds
+exercise Check for updates. Full trailer loads defaults off for new profiles;
+enable it in Options for the profile being tested. This is a test pre-release.
 
 Older Dispatch Companion installations need a manual first SplitHaul download
 because their updater cannot follow the renamed repository. SplitHaul 0.3.0

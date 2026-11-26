@@ -27,7 +27,7 @@ public:
     std::vector<Choice> destinationCities(const std::string& selectedCargo) const;
     std::vector<Choice> firstStops(const std::string& cargo,const std::string& source,const std::string& final) const;
     bool alongRoute(const std::string& source,const std::string& first,const std::string& final) const;
-    std::string nearbyCity(double x,double z) const;
+    std::string nearbyCity(double x,double z,const std::string& pickupBody="") const;
     bool compatible(const std::string& id,const std::string& body) const;
     bool valid(const live::Route& route,const std::string& body) const;
 private:

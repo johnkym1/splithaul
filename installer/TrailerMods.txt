@@ -1,8 +1,8 @@
 GT MULTI-TRAILER COMBINATIONS - Made by Grumpyman
 
-Included with SplitHaul 0.3.1:
+Included with SplitHaul 0.3.4:
   ATS mod 1.1.5 - GT Multi-Trailer Combinations - ATS
-  ETS2 mod 1.1.3 - GT Multi-Trailer Combinations - ETS2
+  ETS2 mod 1.1.6 - GT Multi-Trailer Combinations - ETS2
 Both mods include the SplitHaul tanker artwork and a plain-text website address:
 https://github.com/johnkym1/splithaul
 These packages target game version 1.62. DLC-specific trailers require their
@@ -40,7 +40,11 @@ ATS: up to three cargo trailers, with converter dollies excluded.
   The game calls these Triple, rather than HCT. Stock pup triples also remain.
 ETS2: up to two cargo trailers, with converter dollies excluded.
   Additional dealer doubles: fuel, gas, chrome food tanker and painted food
-  tanker. Use normal Customize choices for other supported trailer families.
+  tanker. HCT freezer choices also include Schmitz S.KO COOL, Tirsan SRI,
+  Schwarzmuller Reefer, Kogel COOL and Krone Cool Liner, through normal
+  Customize options. Each brand requires the matching DLC.
+  Version 1.1.6 corrects cable/hitch accessory compatibility for the latter
+  four brands. Their visible hitch alignment still needs in-game retesting.
 
 These are test builds. The newest ATS road-train menu choices and driving still
 need in-game verification. Try new combinations on a test profile first.

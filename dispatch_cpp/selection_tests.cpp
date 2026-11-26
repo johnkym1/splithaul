@@ -37,6 +37,15 @@ struct LivePanelSelectionTest {
         choose(6,"depot");choose(4,"depot");check(panel.selected[6]=="depot","Changing first company reset final company");
         panel.selected.fill({});panel.status["truck_position"]={{"x",0},{"z",0}};
         check(panel.defaultPickupCity()&&panel.selected[0]=="a","Current city did not default pickup");
+        catalog.positions["port"]={10,0};catalog.locations["port"]={"ferry"};catalog.outgoing["ferry"]={};
+        panel.selected.fill({});panel.status["truck_position"]={{"x",10},{"z",0}};
+        check(panel.defaultPickupCity()&&panel.selected[0]=="a","Nearest ferry-only city blocked a nearby compatible pickup");
+        panel.selected.fill({});panel.body="fueltank";
+        check(!panel.defaultPickupCity()&&panel.selected[0].empty(),"No compatible nearby depot invented a pickup");
+        panel.body="curtainside";panel.status["truck_position"]={{"x",50000},{"z",50000}};
+        check(!panel.defaultPickupCity()&&panel.selected[0].empty(),"Pickup search exceeded its existing distance limit");
+        catalog.positions.erase("port");catalog.locations.erase("port");catalog.outgoing.erase("ferry");
+        panel.status["truck_position"]={{"x",0},{"z",0}};
         panel.selected[0]="b";check(!panel.defaultPickupCity()&&panel.selected[0]=="b","Current city overwrote a manual selection");
         panel.selected.fill({});panel.status["job"]={{"active",true}};check(!panel.defaultPickupCity()&&panel.selected[0].empty(),"Active job allowed pickup changes");
         panel.status["job"]={{"active",false}};panel.status["truck_position"]=nullptr;check(!panel.defaultPickupCity(),"Unavailable position invented a pickup city");

@@ -1,9 +1,9 @@
 #pragma once
 
 // Keep the Options page and Windows executable metadata on the same version.
-#define DISPATCH_VERSION_NUMERIC 0,3,1,0
-#define DISPATCH_VERSION_TEXT "0.3.1"
-#define DISPATCH_VERSION_WIDE L"0.3.1"
+#define DISPATCH_VERSION_NUMERIC 0,3,4,0
+#define DISPATCH_VERSION_TEXT "0.3.4"
+#define DISPATCH_VERSION_WIDE L"0.3.4"
 #define DISPATCH_RELEASE_DATE_WIDE L"26 November 2026"
 #define DISPATCH_AUTHOR_TEXT "grumpyman"
 #define DISPATCH_AUTHOR_WIDE L"grumpyman"

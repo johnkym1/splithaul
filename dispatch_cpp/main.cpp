@@ -34,7 +34,7 @@ static HFONT normalFont=nullptr,titleFont=nullptr,sectionFont=nullptr;
 static bool syncing=false;
 static HINSTANCE instance=nullptr;
 static std::unique_ptr<LivePanel> livePanel;
-static HWND modeCombo=nullptr,randomCheck=nullptr;
+static HWND modeCombo=nullptr,randomCheck=nullptr,fullCapacityCheck=nullptr;
 // Visual order is independent of persisted mode IDs from earlier releases.
 static void selectModeOption(int mode) {
     const auto count=SendMessageW(modeCombo,CB_GETCOUNT,0,0);
@@ -62,7 +62,7 @@ static RunningGames detectRunningGames() {
 static fs::path profileSettings;
 static void saveCurrentOptions(const AppOptions& options) {
     if(profileSettings.empty()){saveOptions(model->root,options);return;}
-    auto data=live::readJson(profileSettings);data["mode"]=options.mode;data["dark_theme"]=options.dark;data["random"]=options.random;
+    auto data=live::readJson(profileSettings);data["mode"]=options.mode;data["dark_theme"]=options.dark;data["random"]=options.random;data["full_trailer_loads"]=options.fullCapacity;
     decodeOptions(data);live::writeJson(profileSettings,data);
 }
 static AppTheme theme;
@@ -86,10 +86,12 @@ static void mode() {
     for(auto h:{modeCombo,modeLabel,themeButton,themeHeading,optionsHelp,aboutHeading,aboutText,donateButton,donateHelp})ShowWindow(h,optionsPage?SW_SHOW:SW_HIDE);
     SendMessageW(randomCheck,BM_SETCHECK,appOptions.random?BST_CHECKED:BST_UNCHECKED,0);
     ShowWindow(randomCheck,optionsPage&&(appOptions.mode==1||appOptions.mode==3)?SW_SHOW:SW_HIDE);
+    SendMessageW(fullCapacityCheck,BM_SETCHECK,appOptions.fullCapacity?BST_CHECKED:BST_UNCHECKED,0);
+    ShowWindow(fullCapacityCheck,optionsPage?SW_SHOW:SW_HIDE);
     if(profileControls)profileControls->show(optionsPage);
     if(updateControls)updateControls->show(optionsPage);
     SetWindowTextW(optionsButton,optionsPage?L"Dispatch":L"Options");SetWindowTextW(historyButton,historyVisible?L"Dispatch":L"History");const auto sub=L"by grumpyman · "+std::wstring(historyVisible?L"History":optionsPage?L"Options":modeLabels[static_cast<size_t>(appOptions.mode)]);SetWindowTextW(subtitle,sub.c_str());
-    if(livePanel){livePanel->setRandom(appOptions.random);livePanel->show(liveMode&&!optionsPage&&!historyVisible);}
+    if(livePanel){livePanel->setRandom(appOptions.random);livePanel->setFullCapacity(appOptions.fullCapacity);livePanel->show(liveMode&&!optionsPage&&!historyVisible);}
     if(historyPage)historyPage->show(historyVisible);
     for(auto h:dispatchHeadings)ShowWindow(h,!optionsPage&&!historyVisible?SW_SHOW:SW_HIDE);
     SetWindowTextW(dispatchHeadings[1],liveMode?L"Trailer and loading":L"Route guidance");
@@ -169,6 +171,7 @@ static void layout() {
     const int modeWidth=modeComboWidth();
     position(modeLabel,44,112,(std::max)(330,width/2)-76,26);position(modeCombo,44,152,modeWidth,220);
     position(randomCheck,44+modeWidth+20,152,112,28);
+    position(fullCapacityCheck,44,184,(std::max)(330,width/2)-76,28);
     if(profileControls)profileControls->layout(width,dpi);
     position(themeHeading,44,252,(std::max)(330,width/2)-76,26);position(themeButton,44,292,220,36);
     if(updateControls)updateControls->layout(width,dpi);
@@ -262,9 +265,10 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             for(const int modeId:{0,1,4,2,3,5}){const auto row=SendMessageW(modeCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(modeLabels[static_cast<size_t>(modeId)]));SendMessageW(modeCombo,CB_SETITEMDATA,static_cast<WPARAM>(row),modeId);}
             selectModeOption(appOptions.mode);
             randomCheck=control(L"BUTTON",L"Random",WS_TABSTOP|BS_AUTOCHECKBOX,305);
+            fullCapacityCheck=control(L"BUTTON",L"Full trailer loads",WS_TABSTOP|BS_AUTOCHECKBOX,308);
             themeButton=control(L"BUTTON",appOptions.dark?L"Dark theme: On":L"Dark theme: Off",WS_TABSTOP,302);
             themeHeading=control(L"STATIC",L"Appearance",SS_LEFT,0);
-            optionsHelp=control(L"STATIC",L"When one simulator is running, its game is selected automatically. Switching games starts in single mode; the current game's delivery mode is kept. Multi-drop supports 3-8 deliveries with all trailers attached.\n\nAttach an owned combination: up to 3 trailers in ATS or 2 in ETS2. Recognised dollies are excluded. Cancellation needs a supported DLL and a stopped truck in the game menu.",SS_LEFT,0);
+            optionsHelp=control(L"STATIC",L"Full trailer loads fills new SplitHaul jobs to trailer weight/volume capacity, ignoring country road-weight limits. Existing deliveries keep their load.\n\nThe running game is selected automatically. Attach up to 3 cargo trailers in ATS or 2 in ETS2; dollies are excluded. Multi-drop supports 3-8 deliveries.",SS_LEFT,0);
             aboutHeading=control(L"STATIC",L"About SplitHaul",SS_LEFT,0);
             aboutText=control(L"STATIC",
                 SPLITHAUL_BRAND_WIDE L" · Version " DISPATCH_VERSION_WIDE L" (development)\n"
@@ -305,6 +309,11 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 auto next=appOptions;next.random=SendMessageW(randomCheck,BM_GETCHECK,0,0)==BST_CHECKED;
                 try{saveCurrentOptions(next);}catch(...){SendMessageW(randomCheck,BM_SETCHECK,appOptions.random?BST_CHECKED:BST_UNCHECKED,0);throw;}
                 appOptions=next;livePanel->setRandom(appOptions.random);return 0;
+            }
+            if(id==308&&HIWORD(wp)==BN_CLICKED){
+                auto next=appOptions;next.fullCapacity=SendMessageW(fullCapacityCheck,BM_GETCHECK,0,0)==BST_CHECKED;
+                try{saveCurrentOptions(next);}catch(...){SendMessageW(fullCapacityCheck,BM_SETCHECK,appOptions.fullCapacity?BST_CHECKED:BST_UNCHECKED,0);throw;}
+                appOptions=next;livePanel->setFullCapacity(appOptions.fullCapacity);return 0;
             }
             if(id==304&&HIWORD(wp)==BN_CLICKED){
                 if(appLinks::donationAvailable&&reinterpret_cast<INT_PTR>(ShellExecuteW(hwnd,L"open",appLinks::donationUrl,nullptr,nullptr,SW_SHOWNORMAL))<=32)

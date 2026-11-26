@@ -53,6 +53,7 @@ int wmain(int argc,wchar_t** argv) {
                 live::Request request;request.id=live::uniqueId();request.session=live::uniqueId();request.context="context";request.trailer="triple";request.created=live::utcMs();request.expires=request.created+120000;request.route=routes.front();request.dropRoutes=routes;
                 for(unsigned i=0;i<count;++i)request.dropIds.push_back(i?live::uniqueId():request.id);
                 request=live::parseRequest(live::requestJson(request));check(request.twoStop&&request.secondId==request.dropIds.back(),"Multi-drop protocol roundtrip failed");
+                for(bool full:{false,true}){auto original=request;original.fullCapacity=full;live::TwoStopRun policy;policy.start(live::parseRequest(live::requestJson(original)));for(unsigned stop=1;stop<count;++stop){const auto next=policy.handoffRequest(original.session,live::utcMs());check(live::parseRequest(live::requestJson(next)).fullCapacity==full,"Multi-drop handoff lost capacity policy");policy.claimHandoff();}}
                 auto bad=live::requestJson(request);bad["drops"][1]["request_id"]=request.id;check(rejects([&]{live::parseRequest(bad);}),"Repeated request identifier accepted");
                 bad=live::requestJson(request);bad["protocol"]=4;check(rejects([&]{live::parseRequest(bad);}),"Old protocol accepted multi-drop");
                 bad=live::requestJson(request);bad["drops"][1]["route"]["source_city_id"]="elsewhere";check(rejects([&]{live::parseRequest(bad);}),"Changed pickup accepted");

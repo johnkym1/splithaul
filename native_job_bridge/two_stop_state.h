@@ -12,6 +12,9 @@ struct TwoStopRun {
     const Route& currentRoute() const {return first.multiDrop()?first.dropRoutes.at(dropIndex):(dropIndex?first.finalRoute:first.route);}
     const Route& nextRoute() const {return first.multiDrop()?first.dropRoutes.at(dropIndex+1):first.finalRoute;}
     std::string nextId() const {return first.multiDrop()?first.dropIds.at(dropIndex+1):first.secondId;}
+    Request handoffRequest(const std::string& session,uint64_t now) const {
+        Request next;next.id=nextId();next.route=nextRoute();next.session=session;next.context=first.context;next.trailer=first.trailer;next.created=now;next.expires=now+120000;next.fullCapacity=first.fullCapacity;return next;
+    }
     uint32_t carriedUnits() const {return first.multiDrop()?multiDropRemaining(firstUnits,static_cast<unsigned>(stopCount()),static_cast<unsigned>(dropIndex)):finalUnits;}
     bool enabled() const {return first.twoStop;}
     bool active() const {return enabled()&&state!="complete"&&state!="stopped"&&state!="uncertain";}

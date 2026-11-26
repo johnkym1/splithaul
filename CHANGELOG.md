@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.4 — Full loads and ETS2 HCT updates, test pre-release, 26 November 2026
+
+- Add per-profile Full trailer loads for new jobs, bounded by trailer payload
+  and volume rather than country road-weight limits; retain policy at handover.
+- Find a nearby pickup city compatible with the attached trailer, including
+  when the nearest city only has incompatible ferry depots.
+- Bundle ATS mod 1.1.5 and ETS2 mod 1.1.6. Add Schmitz, Tirsan, Schwarzmuller,
+  Kogel and Krone HCT freezer choices requiring the respective DLC, and correct
+  cable/hitch compatibility for the latter four brands. Keep mod names stable.
+- Publish the changes from local 0.3.2/0.3.3 builds with a higher version for
+  update-check testing. In-game full loading, hitch alignment and multi-drop
+  driving remain to be confirmed.
+
 ## 0.3.1 - Mod Manager presentation, test pre-release, 26 November 2026
 
 - Add the approved SplitHaul tri-axle tanker artwork to both Mod Manager entries.

@@ -290,7 +290,7 @@ void LivePanel::render() {
             live::TrailerCapacity cap;cap.grossKg=capacity.at("gross_limit_kg");cap.chassisKg=capacity.at("chassis_mass_kg");cap.bodyKg=capacity.at("body_mass_kg");cap.volumeM3=capacity.at("volume_m3");cap.axles=capacity.at("axles");
             std::ostringstream volume;volume<<std::fixed<<std::setprecision(2)<<cap.volumeM3;
             description+="\r\nCombination ceiling: "+tonnes(cap.payloadKg())+" payload / "+volume.str()+" m³";
-            if(catalog&&catalog->cargo.count(selected[2])){const auto& c=catalog->cargo.at(selected[2]);const auto maximum=cap.maximumUnits(c.unitKg,c.unitM3);if(maximum){description+="\r\nFull-load estimate: "+std::to_string(maximum)+" units / "+tonnes(maximum*c.unitKg);if(twoStop&&!multiDrop&&percentageValid)try{const auto remain=live::remainingUnits(maximum,percent);description+=" | final "+std::to_string(percent)+"%: "+std::to_string(remain)+" units / "+tonnes(remain*c.unitKg);}catch(...){description+=" | remaining portion needs at least one whole unit.";}}}
+            if(catalog&&catalog->cargo.count(selected[2])){const auto& c=catalog->cargo.at(selected[2]);const auto maximum=cap.maximumUnits(c.unitKg,c.unitM3);if(maximum){description+=std::string(fullCapacity?"\r\nNew job full-load estimate: ":"\r\nCapacity estimate (route limits may reduce): ")+std::to_string(maximum)+" units / "+tonnes(maximum*c.unitKg);if(twoStop&&!multiDrop&&percentageValid)try{const auto remain=live::remainingUnits(maximum,percent);description+=" | final "+std::to_string(percent)+"%: "+std::to_string(remain)+" units / "+tonnes(remain*c.unitKg);}catch(...){description+=" | remaining portion needs at least one whole unit.";}}}
         }
         text(trailerText,description);
     }
@@ -427,7 +427,7 @@ bool LivePanel::defaultPickupCity() {
     if(!online||!catalog||!selected[0].empty()||body.empty()||shouldWarnOnClose()||ats::awaitingAcknowledgement(savedPlan,lastId,lastSession,formClearedId,plan,result))return false;
     const auto position=status.value("truck_position",live::Json());
     if(!position.is_object()||!position.contains("x")||!position["x"].is_number()||!position.contains("z")||!position["z"].is_number())return false;
-    const auto city=catalog->nearbyCity(position["x"].get<double>(),position["z"].get<double>());
+    const auto city=catalog->nearbyCity(position["x"].get<double>(),position["z"].get<double>(),body);
     if(city.empty()||catalog->companies(city,body,"",true).empty())return false;
     selected[0]=city;return true;
 }
@@ -509,12 +509,15 @@ void LivePanel::send() {
     live::Request r;r.id=live::uniqueId();r.session=fresh.at("session_id");r.context=fresh.at("context_id");r.trailer=t.at("signature");r.created=live::utcMs();r.expires=r.created+120000;r.route=route();
     r.twoStop=twoStop;if(twoStop){r.finalRoute=finalRoute();r.secondId=live::uniqueId();if(!multiDrop)r.remainingPercent=remainingPercent();}
     if(multiDrop){r.dropRoutes=dropRoutes();if(dropCount>availableDropCount||!ats::tripFits(*catalog,r.dropRoutes,currentBody,tripChoices))throw std::runtime_error("Choose distinct compatible stops within the route distance. Only the final delivery can return to the pickup city, at a different company.");r.route=r.dropRoutes.front();for(size_t i=0;i<r.dropRoutes.size();++i)r.dropIds.push_back(i?live::uniqueId():r.id);r.secondId=r.dropIds.back();}
+    r.fullCapacity=fullCapacity;
+    if(r.fullCapacity&&!fresh.value("full_capacity_supported",false))throw std::runtime_error("Full trailer loads needs the updated game plugin. Install it with the game closed, then restart the game.");
     live::parseRequest(live::requestJson(r));
     // Persist the identifier first, so reopening the app can recover its result.
     live::Json saved={{"route",live::routeJson(r.route)},{"last_request_id",r.id},{"session_id",r.session},{"submitted_utc_ms",r.created},{"two_stop",twoStop}};
     if(twoStop){saved["final_route"]=live::routeJson(r.finalRoute);saved["second_request_id"]=r.secondId;}
     if(multiDrop){saved["multi_drop"]=true;saved["drops"]=live::requestJson(r).at("drops");saved["preferred_km"]=preferredKm;saved["round_trip"]=roundTrip;}
     saved["remaining_percent"]=r.remainingPercent;
+    saved["load_policy"]=live::requestJson(r).at("load_policy");
     uint64_t gameCreated=0;if(!runningGame(fresh,&gameCreated)||!gameCreated)throw std::runtime_error("ATS process changed before dispatch. Please retry after it reconnects.");saved["game_process_id"]=fresh.at("pid");saved["game_process_created_utc_ms"]=gameCreated;
     const auto ownershipDir=profileData/"owned_requests";std::filesystem::create_directories(ownershipDir);
     for(const auto& id:{r.id,r.secondId})if(!id.empty())live::writeJson(ownershipDir/(id+".json"),live::Json{{"request_id",id},{"session_id",r.session}},false);

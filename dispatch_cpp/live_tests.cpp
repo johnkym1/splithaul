@@ -113,6 +113,8 @@ int wmain(int argc,wchar_t** argv) {
         live::writeJson(root/"launcher.json",invalidRegistration);check(!dispatchLauncher::registered(foundLauncher,root)&&foundLauncher.exe.empty(),"Bad launcher registration retained old paths");
         live::Request r;r.id=live::uniqueId();r.session=live::uniqueId();r.context="world:player:vehicle:trailer";r.trailer="stock|curtainside|single";r.created=live::utcMs();r.expires=r.created+120000;r.route={"dry_milk","yakima","bn_farm","wenatchee","sg_whs"};
         const auto encoded=live::requestJson(r);const auto parsed=live::parseRequest(encoded);
+        check(!parsed.fullCapacity&&encoded.at("load_policy")=="maximum_whole_units","Legacy route policy changed");
+        auto full=r;full.fullCapacity=true;check(live::parseRequest(live::requestJson(full)).fullCapacity,"Full capacity policy lost on disk roundtrip");
         check(live::routeJson(parsed.route)==live::routeJson(r.route),"Configurable route round-trip failed");
         check(live::currentRequest(r,r.session,r.context,r.trailer,r.created),"Current request rejected");
         check(!live::currentRequest(r,live::uniqueId(),r.context,r.trailer,r.created),"Old game session accepted");
@@ -129,6 +131,7 @@ int wmain(int argc,wchar_t** argv) {
         bad=encoded;bad["load_policy"]="overload";check(rejects([&]{live::parseRequest(bad);}),"Unknown load policy was accepted");
         auto planned=r;planned.twoStop=true;planned.secondId=live::uniqueId();planned.finalRoute=r.route;planned.finalRoute.targetCity="everett";
         const auto plannedJson=live::requestJson(planned);const auto plannedParsed=live::parseRequest(plannedJson);
+        for(bool fullLoads:{false,true}){auto p=planned;p.fullCapacity=fullLoads;live::TwoStopRun c;c.start(live::parseRequest(live::requestJson(p)));p.fullCapacity=!fullLoads;const auto next=c.handoffRequest(p.session,live::utcMs());check(live::parseRequest(live::requestJson(next)).fullCapacity==fullLoads,"Handoff changed the plan's load policy");}
         check(plannedParsed.twoStop&&plannedParsed.secondId==planned.secondId&&plannedParsed.finalRoute.targetCity=="everett"&&plannedParsed.remainingPercent==50,"Two-stop plan round-trip lost the final leg or remaining percentage");
         bad=plannedJson;bad["continuation"]["remaining_percent"]=100;check(rejects([&]{live::parseRequest(bad);}),"Full second load bypassed percentage validation");
         bad=plannedJson;bad["continuation"]["remaining_percent"]=-1;check(rejects([&]{live::parseRequest(bad);}),"Negative remaining load was accepted");

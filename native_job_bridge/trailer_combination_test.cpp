@@ -44,6 +44,18 @@ int main(){try {
     check(!recognisedDolly("/def/vehicle/trailer_owned/custom/chassis/dolly_conv.sii",""),"Unknown custom chassis excluded from count");
     check(!recognisedDolly(base+"chassis/dolly_conv.sii",base+"body/dryvan.sii"),"Load-bearing dolly excluded from count");
     put(image,layout.slave,uintptr_t(0x999));check(!read().known,"Changed native layout accepted");put(image,layout.slave,uintptr_t(0x1b8));
+    // Exercise the real native capacity reader with an isolated double tanker.
+    const unsigned char capacityCode[]={0x48,0x89,0x74,0x24,0x18,0x48,0x89,0x7c,0x24,0x20,0x55,0x48,0x8d,0xac,0x24,0x10};
+    const unsigned char cityCode[]={0x40,0x53,0x48,0x83,0xec,0x20,0x48,0x8b,0x81,0x00,0x01,0x00,0x00,0x48,0x8b,0xd9};
+    memcpy(image.data()+capacityRva,capacityCode,sizeof(capacityCode));memcpy(image.data()+companyCityRva,cityCode,sizeof(cityCode));
+    std::vector<unsigned char> definition(0x100),cargo(0x100);Objects o;o.definition=ptr(definition);o.cargo=ptr(cargo);
+    put(definition,0x30,71500.0f);put(definition,0x34,13880.0f);put(definition,0x38,0.0f);put(definition,0x3c,uint32_t(8));put(definition,0x40,60.0f);
+    put(cargo,0x98,1.0f);put(cargo,0x9c,850.0f);float unitKg=0;
+    check(maximumForRoute(o,unitKg,true)==60&&unitKg==850,"Double tanker must load 60 diesel units (51 tonnes)");
+    put(definition,0x30,20000.0f);check(maximumForRoute(o,unitKg,true)==7,"Full capacity exceeded trailer payload limit");
+    put(cargo,0x98,0.0f);check(maximumForRoute(o,unitKg,true)==0,"Full capacity accepted missing cargo volume");put(cargo,0x98,1.0f);
+    put(definition,0x34,21000.0f);check(maximumForRoute(o,unitKg,true)==0,"Full capacity accepted invalid trailer tare");put(definition,0x34,13880.0f);
+    image[capacityRva]=0;check(maximumForRoute(o,unitKg,true)==0,"Full capacity bypassed native layout pin");
     activeHostHash="unknown";check(!read().known,"Unpinned native layout accepted");
     check(!live::supportedTrailer(live::Json{{"chain_type","single"}}),"Old plugin bypassed physical verification");
     std::cout<<"PASS: "<<checks<<" "<<dispatchGame::id<<" trailer-combination checks.\n";return 0;
