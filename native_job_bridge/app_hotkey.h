@@ -123,8 +123,8 @@ static bool initialize() {
 }
 static void poll() {
     const auto reported=notice.exchange(0);if(reported){
-        if(reported==1)log("[GT_TELEMETRY] Shift+F9: Dispatch Companion foreground confirmed.");
-        else {const auto message=std::string("[GT_TELEMETRY] Shift+F9 launcher failed: Windows error ")+std::to_string(reported-1)+", stage "+std::to_string(lastStage.load())+" (1=launcher.json, 2=window search, 3=process creation, 4=exception). Open Launch Dispatch.cmd once and retry.";log(message.c_str());}
+        if(reported==1)log("[GT_TELEMETRY] Shift+F9: SplitHaul foreground confirmed.");
+        else {const auto message=std::string("[GT_TELEMETRY] Shift+F9 launcher failed: Windows error ")+std::to_string(reported-1)+", stage "+std::to_string(lastStage.load())+" (1=launcher.json, 2=window search, 3=process creation, 4=exception). Open Launch SplitHaul.cmd once and retry.";log(message.c_str());}
     }
 }
 static void shutdown() {if(stopEvent)SetEvent(stopEvent);if(listener.joinable())listener.join();if(worker.joinable())worker.join();if(stopEvent){CloseHandle(stopEvent);stopEvent=nullptr;}}

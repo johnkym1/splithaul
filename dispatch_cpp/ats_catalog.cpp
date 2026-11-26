@@ -22,8 +22,10 @@ Catalog::Catalog(const fs::path& project) {
     const std::regex cityName(R"rx(\bcity_name\s*:\s*"([^"]+)")rx"),country(R"rx(\bcountry\s*:\s*([a-z0-9_]+))rx"),location(R"rx(\bcity\s*:\s*([a-z0-9_]+))rx"),companyName(R"rx((?:^|\n)\s*name\s*:\s*"([^"]+)")rx");
     const std::regex cargoId(R"rx(\bcargo_data\s*:\s*cargo\.([a-z0-9_]+))rx"),bodyType(R"rx(\bbody_types\[\]\s*:\s*([a-z0-9_]+))rx"),cargoRef(R"rx(\bcargo\s*:\s*"?cargo\.([a-z0-9_]+))rx");
     for(const auto& root:roots) {
+        auto package=root.parent_path().filename().u8string();if(package.rfind("dlc_",0)!=0)package="base";
         if(fs::is_directory(root/"city"))for(const auto& f:fs::directory_iterator(root/"city"))if(f.is_regular_file()&&f.path().extension()==".sui") {
             const auto text=read(f.path()),id=f.path().stem().u8string();auto label=match(text,cityName);const auto state=match(text,country);
+            cityCountries[id]=state;
             if(label.empty()||label.rfind("@@",0)==0)label=dispatch::displayToken(id);
             if(!state.empty())label+=" ("+dispatch::displayToken(state)+")";cityNames[id]=label;
         }
@@ -41,7 +43,7 @@ Catalog::Catalog(const fs::path& project) {
             }
             if(!company.is_directory())continue;const auto id=company.path().filename().u8string();if(!live::identifier(id))continue;
             const auto editor=company.path()/"editor";
-            if(fs::is_directory(editor))for(const auto& f:fs::directory_iterator(editor))if(f.is_regular_file()&&f.path().extension()==".sii"){const auto city=match(read(f.path()),location);if(live::identifier(city))locations[city].insert(id);}
+            if(fs::is_directory(editor))for(const auto& f:fs::directory_iterator(editor))if(f.is_regular_file()&&f.path().extension()==".sii"){const auto city=match(read(f.path()),location);if(live::identifier(city)){locations[city].insert(id);depotPackages[city+"."+id].insert(package);}}
             for(const auto& direction:{std::string("out"),std::string("in")}) {
                 const auto dir=company.path()/direction;if(!fs::is_directory(dir))continue;
                 for(const auto& f:fs::directory_iterator(dir))if(f.is_regular_file()&&f.path().extension()==".sii") {
@@ -55,12 +57,14 @@ Catalog::Catalog(const fs::path& project) {
 live::Json Catalog::snapshot() const {
     live::Json definitions=live::Json::object();
     for(const auto& item:cargo)definitions[item.first]={{"label",item.second.label},{"bodies",item.second.bodies},{"unit_kg",item.second.unitKg},{"unit_m3",item.second.unitM3}};
-    return {{"format",1},{"game",dispatchGame::id},{"cargo",definitions},{"city_names",cityNames},{"company_names",companyNames},{"locations",locations},{"outgoing",outgoing},{"incoming",incoming},{"city_positions",positions}};
+    return {{"format",1},{"game",dispatchGame::id},{"cargo",definitions},{"city_names",cityNames},{"city_countries",cityCountries},{"depot_packages",depotPackages},{"company_names",companyNames},{"locations",locations},{"outgoing",outgoing},{"incoming",incoming},{"city_positions",positions}};
 }
 void Catalog::loadSnapshot(const live::Json& data) {
     if(!data.is_object()||data.at("format")!=1||data.at("game")!=dispatchGame::id)
         throw std::runtime_error("Packaged game catalog has the wrong format or game.");
     cityNames=data.at("city_names").get<decltype(cityNames)>();companyNames=data.at("company_names").get<decltype(companyNames)>();
+    if(data.contains("city_countries"))cityCountries=data.at("city_countries").get<decltype(cityCountries)>();
+    if(data.contains("depot_packages"))depotPackages=data.at("depot_packages").get<decltype(depotPackages)>();
     locations=data.at("locations").get<decltype(locations)>();outgoing=data.at("outgoing").get<decltype(outgoing)>();incoming=data.at("incoming").get<decltype(incoming)>();
     if(data.contains("city_positions"))positions=data.at("city_positions").get<decltype(positions)>();
     for(const auto& point:positions)if(!live::identifier(point.first)||!std::isfinite(point.second[0])||!std::isfinite(point.second[1]))throw std::runtime_error("Invalid city position in catalog.");
@@ -85,6 +89,7 @@ std::vector<Choice> Catalog::cargoes(const std::string& company,const std::strin
 }
 std::vector<Choice> Catalog::companies(const std::string& city,const std::string& body,const std::string& selectedCargo,bool source) const {
     std::vector<Choice> result;const auto found=locations.find(city);if(found!=locations.end())for(const auto& id:found->second) {
+        if(!depotAvailable(city,id))continue;
         const auto accepted=incoming.find(id);if(source?!cargoes(id,body).empty():accepted!=incoming.end()&&accepted->second.count(selectedCargo))result.push_back({id,name(companyNames,id)});
     }
     std::map<std::string,size_t> counts;for(const auto& c:result)++counts[c.label];for(auto& c:result)if(counts[c.label]>1)c.label+=" ["+c.id+"]";sort(result);return result;
@@ -120,6 +125,12 @@ std::string Catalog::nearbyCity(double x,double z) const {
 }
 bool Catalog::valid(const live::Route& r,const std::string& body) const {
     const auto source=locations.find(r.sourceCity),target=locations.find(r.targetCity),out=outgoing.find(r.sourceCompany),in=incoming.find(r.targetCompany);
-    return r.valid()&&compatible(r.cargo,body)&&source!=locations.end()&&source->second.count(r.sourceCompany)&&target!=locations.end()&&target->second.count(r.targetCompany)&&out!=outgoing.end()&&out->second.count(r.cargo)&&in!=incoming.end()&&in->second.count(r.cargo);
+    return r.valid()&&compatible(r.cargo,body)&&depotAvailable(r.sourceCity,r.sourceCompany)&&depotAvailable(r.targetCity,r.targetCompany)&&source!=locations.end()&&source->second.count(r.sourceCompany)&&target!=locations.end()&&target->second.count(r.targetCompany)&&out!=outgoing.end()&&out->second.count(r.cargo)&&in!=incoming.end()&&in->second.count(r.cargo);
+}
+bool Catalog::depotAvailable(const std::string& city,const std::string& company) const {
+    if(!filterDlcs)return true;
+    const auto found=depotPackages.find(city+"."+company);if(found==depotPackages.end())return false;
+    for(const auto& package:found->second)if(package=="base"||loadedDlcs.count(package))return true;
+    return false;
 }
 }

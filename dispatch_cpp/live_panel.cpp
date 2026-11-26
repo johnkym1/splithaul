@@ -18,6 +18,8 @@
 #include "../dispatch_shared/cancel_protocol.h"
 #include "cancel_hint.h"
 #include "win_text.h"
+#include "multi_drop.h"
+#include "dlc_filter.h"
 
 namespace {
 std::wstring wide(const std::string& input) {
@@ -40,7 +42,7 @@ bool observedGameExited(const live::Json& previous,uint64_t created) {
     if(!exited&&created){FILETIME birth={},exit={},kernel={},user={};if(GetProcessTimes(process,&birth,&exit,&kernel,&user)){ULARGE_INTEGER stamp;stamp.LowPart=birth.dwLowDateTime;stamp.HighPart=birth.dwHighDateTime;exited=(stamp.QuadPart-116444736000000000ULL)/10000!=created;}}
     CloseHandle(process);return exited;
 }
-std::string currentProfile(const live::Json& status) {
+std::string currentGameLog(const live::Json& status) {
     uint64_t created=0;if(!runningGame(status,&created)||!created)return {};
     PWSTR documents=nullptr;if(FAILED(SHGetKnownFolderPath(FOLDERID_Documents,0,nullptr,&documents)))return {};
     const auto path=std::filesystem::path(documents)/dispatchGame::documents/L"game.log.txt";CoTaskMemFree(documents);
@@ -50,8 +52,9 @@ std::string currentProfile(const live::Json& status) {
     std::ifstream input(path,std::ios::binary|std::ios::ate);if(!input)return {};
     const auto size=input.tellg();if(size<=0||size>std::streamoff(32*1024*1024))return {};
     std::string contents(static_cast<size_t>(size),'\0');input.seekg(0);if(!input.read(contents.data(),size))return {};
-    return ats::selectedProfileFromLog(contents);
+    return contents;
 }
+std::string currentProfile(const live::Json& status) {return ats::selectedProfileFromLog(currentGameLog(status));}
 live::Json bridgeStatus(const std::filesystem::path& bridge) {
     auto s=live::readJson(bridge/"status.json");uint64_t created=0;
     if(runningGame(s,&created)){const auto problem=live::startupDiagnostic(s,s.value("pid",DWORD(0)),created,live::utcMs());if(!problem.empty())throw std::runtime_error(problem);}
@@ -59,7 +62,7 @@ live::Json bridgeStatus(const std::filesystem::path& bridge) {
 }
 }
 LivePanel::LivePanel(HWND h,HINSTANCE app,const std::filesystem::path& root):parent(h),instance(app),project(root),bridge(live::ipcFolder()) {
-    try{catalog=std::make_unique<ats::Catalog>(project);}catch(const std::exception& e){catalogError=e.what();}
+    try{catalog=std::make_unique<ats::Catalog>(project);catalog->filterDlcs=true;}catch(const std::exception& e){catalogError=e.what();}
     const wchar_t* names[]={L"Pickup city",L"Pickup company",L"Cargo for attached trailer",L"Delivery city",L"Delivery company",L"Final delivery city",L"Final delivery company"};
     for(size_t i=0;i<7;++i){labels[i]=CreateWindowW(L"STATIC",names[i],WS_CHILD|SS_LEFT,0,0,0,0,parent,nullptr,instance,nullptr);combos[i]=CreateWindowW(WC_COMBOBOXW,L"",WS_CHILD|WS_TABSTOP|WS_VSCROLL|CBS_DROPDOWNLIST|CBS_HASSTRINGS|CBS_OWNERDRAWFIXED,0,0,0,0,parent,reinterpret_cast<HMENU>(static_cast<INT_PTR>(400+i)),instance,nullptr);SendMessageW(combos[i],CB_SETMINVISIBLE,10,0);}
     percentLabel=CreateWindowW(L"STATIC",L"Final load remaining (%)",WS_CHILD,0,0,0,0,parent,nullptr,instance,nullptr);
@@ -69,6 +72,18 @@ LivePanel::LivePanel(HWND h,HINSTANCE app,const std::filesystem::path& root):par
     if(!percentSpin)throw std::runtime_error("Could not create the remaining-load number control.");
     SendMessageW(percentSpin,UDM_SETBUDDY,reinterpret_cast<WPARAM>(percentEdit),0);
     SendMessageW(percentSpin,UDM_SETRANGE32,1,99);SendMessageW(percentSpin,UDM_SETPOS32,0,savedPercent);
+    auto dropCombo=[&](int id){return CreateWindowW(WC_COMBOBOXW,L"",WS_CHILD|WS_TABSTOP|WS_VSCROLL|CBS_DROPDOWNLIST,0,0,0,0,parent,reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),instance,nullptr);};
+    stopCountCombo=dropCombo(409);stopEditorCombo=dropCombo(410);selectionCombo=dropCombo(411);
+    for(unsigned count=3;count<=live::maximumStops;++count)SendMessageW(stopCountCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(std::to_wstring(count).c_str()));
+    SendMessageW(stopCountCombo,CB_SETCURSEL,0,0);
+    for(const auto caption:{L"Automatic",L"Manual"})SendMessageW(selectionCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(caption));
+    SendMessageW(selectionCombo,CB_SETCURSEL,0,0);
+    generateButton=CreateWindowW(L"BUTTON",L"Generate stops",WS_CHILD|WS_TABSTOP,0,0,0,0,parent,reinterpret_cast<HMENU>(412),instance,nullptr);
+    distanceLabel=CreateWindowW(L"STATIC",L"Preferred km (0 = direct)",WS_CHILD,0,0,0,0,parent,nullptr,instance,nullptr);
+    distanceEdit=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",L"0",WS_CHILD|WS_TABSTOP|ES_NUMBER|ES_AUTOHSCROLL,0,0,0,0,parent,reinterpret_cast<HMENU>(413),instance,nullptr);SendMessageW(distanceEdit,EM_SETLIMITTEXT,5,0);
+    roundTripCheck=CreateWindowW(L"BUTTON",L"Round trip (return to start)",WS_CHILD|WS_TABSTOP|BS_AUTOCHECKBOX,0,0,0,0,parent,reinterpret_cast<HMENU>(414),instance,nullptr);
+    loadTripPreferences();
+    refreshDropEditor();
     trailerText=CreateWindowW(L"STATIC",L"",WS_CHILD,0,0,0,0,parent,nullptr,instance,nullptr);help=CreateWindowW(L"STATIC",L"",WS_CHILD,0,0,0,0,parent,nullptr,instance,nullptr);
     dispatchButton=CreateWindowW(L"BUTTON",L"Dispatch job to the game",WS_CHILD|WS_TABSTOP|BS_DEFPUSHBUTTON,0,0,0,0,parent,reinterpret_cast<HMENU>(static_cast<INT_PTR>(DispatchId)),instance,nullptr);
     acknowledgeButton=CreateWindowW(L"BUTTON",L"Acknowledge completion",WS_CHILD|WS_TABSTOP,0,0,0,0,parent,reinterpret_cast<HMENU>(502),instance,nullptr);
@@ -86,9 +101,12 @@ void LivePanel::selectGame(bool ets) {
     status=observedGame=live::Json::object();body.clear();signature.clear();offlineReason.clear();
     historyRows=0;historyError.clear();historyReceipt.clear();catalogError.clear();
     for(auto& choices:options)choices.clear();catalog.reset();
-    try{catalog=std::make_unique<ats::Catalog>(project);}catch(const std::exception& ex){catalogError=ex.what();}
+    dlcSession.clear();tripKey.clear();loadTripPreferences();
+    try{catalog=std::make_unique<ats::Catalog>(project);catalog->filterDlcs=true;}catch(const std::exception& ex){catalogError=ex.what();}
 }
 void LivePanel::loadProfile(const std::string& name) {
+    intermediateDrops.assign(2,{});dropCount=3;editingDrop=0;
+    tripKey.clear();
     profileData.clear();selected.fill({});lastId.clear();lastSession.clear();formClearedId.clear();reviewedSession.clear();
     submitted=0;savedPlan=false;savedPercent=50;result=live::Json::object();plan=live::Json::object();reviewPromptPosted=false;sendError.clear();pendingCancelId.clear();followCancelId.clear();cancelMessage.clear();
     if(!name.empty())try {
@@ -100,27 +118,91 @@ void LivePanel::loadProfile(const std::string& name) {
             const auto cleanup=saved.value("cancel_cleanup",live::Json::object());const auto priorOutcome=cleanup.value("outcome",std::string());if(priorOutcome=="game_requested"||priorOutcome=="contact_lost"){const auto id=cleanup.value("request_id",std::string());if(live::requestId(id))followCancelId=id;}
             savedPercent=saved.value("remaining_percent",50u);if(savedPercent<1||savedPercent>99)savedPercent=50;
             if(formClearedId!=lastId||lastId.empty()){const auto r=live::parseRoute(saved.at("route"));selected={r.sourceCity,r.sourceCompany,r.cargo,r.targetCity,r.targetCompany};if(savedPlan){const auto final=live::parseRoute(saved.at("final_route"));selected[5]=final.targetCity;selected[6]=final.targetCompany;}}
+            if(saved.value("multi_drop",false)&&formClearedId!=lastId) {
+                const auto& drops=saved.at("drops");if(!drops.is_array()||drops.size()<3||drops.size()>live::maximumStops)throw std::runtime_error("Invalid saved multi-drop plan.");
+                dropCount=static_cast<unsigned>(drops.size());intermediateDrops.clear();
+                for(size_t i=0;i+1<drops.size();++i){const auto r=live::parseRoute(drops[i].at("route"));intermediateDrops.push_back({r.targetCity,r.targetCompany});}
+                preferredKm=saved.value("preferred_km",preferredKm);roundTrip=selected[0]==selected[5];
+                SetWindowTextW(distanceEdit,std::to_wstring(preferredKm).c_str());SendMessageW(roundTripCheck,BM_SETCHECK,roundTrip?BST_CHECKED:BST_UNCHECKED,0);
+            }
         }
         profileData=dir;
         if(std::filesystem::exists(dir/"cancel_pending.json")){const auto pending=live::readJson(dir/"cancel_pending.json");pendingCancelId=pending.at("request_id").get<std::string>();if(!live::requestId(pendingCancelId))throw std::runtime_error("Invalid pending cancellation identifier.");}
     }catch(const std::exception& ex){profileData.clear();selected.fill({});lastId.clear();lastSession.clear();pendingCancelId.clear();sendError=std::string("Profile dispatch data: ")+ex.what();}
     if(percentEdit){syncing=true;SetWindowTextW(percentEdit,std::to_wstring(savedPercent).c_str());SendMessageW(percentSpin,UDM_SETPOS32,0,savedPercent);syncing=false;}
+    refreshDropEditor();
 }
 live::Route LivePanel::route() const {return {selected[2],selected[0],selected[1],selected[3],selected[4]};}
 live::Route LivePanel::finalRoute() const {return {selected[2],selected[0],selected[1],selected[5],selected[6]};}
 void LivePanel::setTwoStop(bool value) {twoStop=value;text(labels[3],value?"First delivery city":"Delivery city");text(labels[4],value?"First delivery company":"Delivery company");text(dispatchButton,value?"Start two-stop plan":"Dispatch job to ATS");}
+void LivePanel::setMultiDrop(bool value) {
+    if(multiDrop!=value){multiDrop=value;if(value){selected[3]=intermediateDrops.at(editingDrop)[0];selected[4]=intermediateDrops.at(editingDrop)[1];}choices();}
+    text(percentLabel,value?"Deliveries (includes final)":"Final load remaining (%)");
+    if(value)text(labels[4],"Delivery company");
+}
+std::vector<live::Route> LivePanel::dropRoutes() const {
+    std::vector<live::Route> routes;
+    for(size_t i=0;i<intermediateDrops.size();++i){auto r=finalRoute();r.targetCity=i==editingDrop?selected[3]:intermediateDrops[i][0];r.targetCompany=i==editingDrop?selected[4]:intermediateDrops[i][1];routes.push_back(r);}
+    routes.push_back(finalRoute());return routes;
+}
+void LivePanel::refreshDropEditor() {
+    if(!stopEditorCombo)return;
+    SendMessageW(stopEditorCombo,CB_RESETCONTENT,0,0);
+    for(unsigned i=0;i+1<dropCount;++i){const auto label=L"Delivery "+std::to_wstring(i+1)+L" city";SendMessageW(stopEditorCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));}
+    SendMessageW(stopEditorCombo,CB_SETCURSEL,editingDrop,0);
+    SendMessageW(stopCountCombo,CB_RESETCONTENT,0,0);
+    const unsigned limit=shouldWarnOnClose()?dropCount:availableDropCount;
+    for(unsigned count=3;count<=limit;++count)SendMessageW(stopCountCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(std::to_wstring(count).c_str()));
+    SendMessageW(stopCountCombo,CB_SETCURSEL,dropCount<=limit?dropCount-3:static_cast<WPARAM>(-1),0);
+}
+unsigned LivePanel::readPreferredKm() const {
+    wchar_t value[8]={};const auto n=GetWindowTextW(distanceEdit,value,8);
+    if(n<1||n>5||!std::all_of(value,value+n,[](wchar_t c){return c>=L'0'&&c<=L'9';}))throw std::runtime_error("Enter 0 for a direct route, or a preferred distance up to 10000 km.");
+    const auto km=std::wcstoul(value,nullptr,10);if(km>10000)throw std::runtime_error("Preferred distance cannot exceed 10000 km.");return static_cast<unsigned>(km);
+}
+void LivePanel::loadTripPreferences() {
+    preferredKm=0;roundTrip=false;
+    const auto path=project/"multi_drop_preferences.json";
+    try{if(std::filesystem::exists(path)){const auto value=live::readJson(path).value(dispatchGame::id,live::Json::object());preferredKm=value.value("preferred_km",0u);roundTrip=value.value("round_trip",false);if(preferredKm>10000)preferredKm=0;}}catch(const std::exception& ex){sendError=ex.what();}
+    if(distanceEdit)SetWindowTextW(distanceEdit,std::to_wstring(preferredKm).c_str());if(roundTripCheck)SendMessageW(roundTripCheck,BM_SETCHECK,roundTrip?BST_CHECKED:BST_UNCHECKED,0);
+}
+void LivePanel::saveTripPreferences() {
+    const auto path=project/"multi_drop_preferences.json";auto value=std::filesystem::exists(path)?live::readJson(path):live::Json::object();
+    value[dispatchGame::id]={{"preferred_km",preferredKm},{"round_trip",roundTrip}};live::writeJson(path,value);
+}
+void LivePanel::refreshTripChoices() {
+    if(!multiDrop||!catalog||shouldWarnOnClose()||ats::awaitingAcknowledgement(savedPlan,lastId,lastSession,formClearedId,plan,result))return;
+    const std::string key=live::routeJson(finalRoute()).dump()+body+std::to_string(preferredKm)+live::Json(catalog->loadedDlcs).dump()+std::to_string(catalog->filterDlcs)+status.value("trailer_capacity",live::Json::object()).dump();
+    if(key==tripKey)return;tripKey=key;
+    tripChoices=ats::availableTrips(*catalog,finalRoute(),body,preferredKm);availableDropCount=tripChoices.maximum;
+    try{const auto& capacity=status.at("trailer_capacity");live::TrailerCapacity cap;cap.grossKg=capacity.at("gross_limit_kg");cap.chassisKg=capacity.at("chassis_mass_kg");cap.bodyKg=capacity.at("body_mass_kg");cap.volumeM3=capacity.at("volume_m3");cap.axles=capacity.at("axles");const auto& cargo=catalog->cargo.at(selected[2]);availableDropCount=(std::min)(availableDropCount,cap.maximumUnits(cargo.unitKg,cargo.unitM3));}catch(...){}
+    if(availableDropCount>=3&&dropCount>availableDropCount){dropCount=availableDropCount;intermediateDrops.resize(dropCount-1);editingDrop=(std::min)(editingDrop,dropCount-2);selected[3]=intermediateDrops[editingDrop][0];selected[4]=intermediateDrops[editingDrop][1];}
+    if(availableDropCount<tripChoices.maximum)tripChoices.message="Cargo capacity limits this route to "+std::to_string(availableDropCount)+" deliveries (at least one whole unit each).";
+    refreshDropEditor();
+}
+void LivePanel::generateDrops() {
+    if(!catalog)throw std::runtime_error("The cargo catalog is unavailable.");
+    preferredKm=readPreferredKm();
+    refreshTripChoices();if(availableDropCount<3||dropCount>availableDropCount)throw std::runtime_error(tripChoices.message);
+    const auto& routes=tripChoices.routes.at(dropCount);if(routes.empty())throw std::runtime_error("No compatible itinerary fits this delivery count.");
+    for(size_t i=0;i<intermediateDrops.size();++i)intermediateDrops[i]={routes[i].targetCity,routes[i].targetCompany};
+    selected[3]=intermediateDrops[editingDrop][0];selected[4]=intermediateDrops[editingDrop][1];choices();
+}
 void LivePanel::setRandom(bool value) {
     if(randomMiddle==value)return;
     randomMiddle=value;
-    if(value&&twoStop&&online&&!body.empty()&&(lastId.empty()||formClearedId==lastId)&&!shouldWarnOnClose()&&!ats::awaitingAcknowledgement(savedPlan,lastId,lastSession,formClearedId,plan,result)&&!ats::canConfirmUnrecordedCompletion(savedPlan,lastId,lastSession,formClearedId,plan,result,status,live::utcMs())){selected[3].clear();selected[4].clear();}
+    if(value&&twoStop&&!multiDrop&&online&&!body.empty()&&(lastId.empty()||formClearedId==lastId)&&!shouldWarnOnClose()&&!ats::awaitingAcknowledgement(savedPlan,lastId,lastSession,formClearedId,plan,result)&&!ats::canConfirmUnrecordedCompletion(savedPlan,lastId,lastSession,formClearedId,plan,result,status,live::utcMs())){selected[3].clear();selected[4].clear();}
     choices();render();
 }
-void LivePanel::show(bool value) {visible=value;for(size_t i=0;i<7;++i){ShowWindow(labels[i],value&&(i<5||twoStop)?SW_SHOW:SW_HIDE);ShowWindow(combos[i],value&&(i<5||twoStop)?SW_SHOW:SW_HIDE);}for(auto h:{percentLabel,percentEdit,percentSpin})ShowWindow(h,value&&twoStop?SW_SHOW:SW_HIDE);for(auto h:{trailerText,help,dispatchButton,acknowledgeButton,cancelButton,statusText,jobText})ShowWindow(h,value?SW_SHOW:SW_HIDE);if(!value&&cancelTooltip)SendMessageW(cancelTooltip,TTM_ACTIVATE,FALSE,0);if(value)tick();}
+void LivePanel::show(bool value) {visible=value;for(size_t i=0;i<7;++i){ShowWindow(labels[i],value&&(i<5||twoStop)&&!(multiDrop&&i==3)?SW_SHOW:SW_HIDE);ShowWindow(combos[i],value&&(i<5||twoStop)?SW_SHOW:SW_HIDE);}ShowWindow(percentLabel,value&&twoStop?SW_SHOW:SW_HIDE);for(auto h:{percentEdit,percentSpin})ShowWindow(h,value&&twoStop&&!multiDrop?SW_SHOW:SW_HIDE);for(auto h:{stopCountCombo,stopEditorCombo,selectionCombo,generateButton,distanceLabel,distanceEdit,roundTripCheck})ShowWindow(h,value&&multiDrop?SW_SHOW:SW_HIDE);for(auto h:{trailerText,help,dispatchButton,acknowledgeButton,cancelButton,statusText,jobText})ShowWindow(h,value?SW_SHOW:SW_HIDE);if(!value&&cancelTooltip)SendMessageW(cancelTooltip,TTM_ACTIVATE,FALSE,0);if(value)tick();}
 void LivePanel::layout(int width,int height,UINT dpi) {
-    const DispatchLayout page(true,twoStop,height);
+    const DispatchLayout page(true,twoStop,height,multiDrop);
     auto place=[dpi](HWND h,int x,int y,int w,int hgt){MoveWindow(h,MulDiv(x,static_cast<int>(dpi),96),MulDiv(y,static_cast<int>(dpi),96),MulDiv(w,static_cast<int>(dpi),96),MulDiv(hgt,static_cast<int>(dpi),96),TRUE);};
-    for(size_t i=0;i<7;++i){const int y=DispatchLayout::fieldTop(static_cast<int>(i));place(labels[i],44,y+4,216,26);place(combos[i],266,y,(std::min)(420,width-310),340);}
+    for(size_t i=0;i<7;++i){const int row=multiDrop&&i>=3?(i>=5?static_cast<int>(i)-2:static_cast<int>(i)+2):static_cast<int>(i);const int y=DispatchLayout::fieldTop(row);place(labels[i],44,y+4,216,26);place(combos[i],266,y,(std::min)(420,width-310),340);}
     place(percentLabel,44,DispatchLayout::fieldTop(7)+4,216,26);place(percentEdit,266,DispatchLayout::fieldTop(7),88,28);place(percentSpin,354,DispatchLayout::fieldTop(7),22,28);
+    place(stopEditorCombo,44,DispatchLayout::fieldTop(5),200,280);
+    place(stopCountCombo,266,DispatchLayout::fieldTop(7),54,220);place(selectionCombo,330,DispatchLayout::fieldTop(7),120,150);place(generateButton,460,DispatchLayout::fieldTop(7),(std::min)(226,width-504),28);
+    place(distanceLabel,44,DispatchLayout::fieldTop(8)+4,216,26);place(distanceEdit,266,DispatchLayout::fieldTop(8),88,28);place(roundTripCheck,370,DispatchLayout::fieldTop(8),316,28);
     place(trailerText,44,page.guidanceTop+40,width-88,80);place(help,44,page.guidanceTop+124,width-88,40);
     const int buttonWidth=(width-112)/3;
     place(dispatchButton,44,page.actionsTop+38,buttonWidth,36);place(acknowledgeButton,56+buttonWidth,page.actionsTop+38,buttonWidth,36);place(cancelButton,68+buttonWidth*2,page.actionsTop+38,buttonWidth,36);
@@ -144,10 +226,14 @@ bool LivePanel::shouldWarnOnClose() const {
 void LivePanel::choices() {
     syncing=true;
     const bool awaiting=ats::awaitingAcknowledgement(savedPlan,lastId,lastSession,formClearedId,plan,result);
-    const bool autoMiddle=twoStop&&randomMiddle&&online&&!body.empty()&&(lastId.empty()||formClearedId==lastId)&&!shouldWarnOnClose()&&!awaiting&&!ats::canConfirmUnrecordedCompletion(savedPlan,lastId,lastSession,formClearedId,plan,result,status,live::utcMs());
+    const bool autoMiddle=twoStop&&!multiDrop&&randomMiddle&&online&&!body.empty()&&(lastId.empty()||formClearedId==lastId)&&!shouldWarnOnClose()&&!awaiting&&!ats::canConfirmUnrecordedCompletion(savedPlan,lastId,lastSession,formClearedId,plan,result,status,live::utcMs());
     // Populate the final city first so its current value can constrain the first stop.
     for(const size_t i:{0u,1u,2u,5u,6u,3u,4u}) {
-        options[i].clear();if(catalog){if(i==0)options[i]=catalog->sourceCities(body);else if(i==1)options[i]=catalog->companies(selected[0],body,"",true);else if(i==2)options[i]=catalog->cargoes(selected[1],body);else if(i==3&&twoStop)options[i]=catalog->firstStops(selected[2],selected[0],selected[5]);else if(i==3||i==5){options[i]=catalog->destinationCities(selected[2]);if(i==5&&twoStop)options[i].erase(std::remove_if(options[i].begin(),options[i].end(),[&](const ats::Choice& c){return catalog->firstStops(selected[2],selected[0],c.id).empty();}),options[i].end());}else options[i]=catalog->companies(selected[i-1],body,selected[2],false);}
+        if(multiDrop&&roundTrip&&i==5&&!shouldWarnOnClose()&&!awaiting)selected[5]=selected[0];
+        if(multiDrop&&i==3)refreshTripChoices();
+        options[i].clear();if(catalog){if(i==0)options[i]=catalog->sourceCities(body);else if(i==1)options[i]=catalog->companies(selected[0],body,"",true);else if(i==2)options[i]=catalog->cargoes(selected[1],body);else if(i==3&&twoStop&&!multiDrop)options[i]=catalog->firstStops(selected[2],selected[0],selected[5]);else if(i==3||i==5){options[i]=catalog->destinationCities(selected[2]);if(i==5&&twoStop&&!multiDrop)options[i].erase(std::remove_if(options[i].begin(),options[i].end(),[&](const ats::Choice& c){return catalog->firstStops(selected[2],selected[0],c.id).empty();}),options[i].end());}else options[i]=catalog->companies(selected[i-1],body,selected[2],false);}
+        if(multiDrop&&i==6&&selected[0]==selected[5])options[i].erase(std::remove_if(options[i].begin(),options[i].end(),[&](const ats::Choice& c){return c.id==selected[1];}),options[i].end());
+        if(multiDrop&&i==3&&!shouldWarnOnClose()&&!awaiting)options[i].erase(std::remove_if(options[i].begin(),options[i].end(),[&](const ats::Choice& c){return !tripChoices.cities.count(c.id);}),options[i].end());
         if(autoMiddle&&(i==3||i==4)&&!selected[5].empty()&&!options[i].empty()&&std::none_of(options[i].begin(),options[i].end(),[&](const ats::Choice& c){return c.id==selected[i];})){
             const auto index=std::uniform_int_distribution<size_t>(0,options[i].size()-1)(randomEngine);
             selected[i]=options[i][index].id;if(i==3)selected[4].clear();
@@ -161,7 +247,7 @@ void LivePanel::choices() {
             options[i].push_back({selected[i],name});chosen=static_cast<int>(SendMessageW(combos[i],CB_ADDSTRING,0,reinterpret_cast<LPARAM>(wide(name).c_str())));
         }else if(chosen<0&&!body.empty())selected[i].clear();
         SendMessageW(combos[i],CB_SETCURSEL,static_cast<WPARAM>(chosen),0);
-    }syncing=false;
+    }if(multiDrop)intermediateDrops.at(editingDrop)={selected[3],selected[4]};syncing=false;
 }
 void LivePanel::render() {
     const auto t=status.value("trailer",live::Json::object());const auto j=status.value("job",live::Json::object());
@@ -176,13 +262,19 @@ void LivePanel::render() {
     const bool review=online&&ats::canConfirmUnrecordedCompletion(savedPlan,lastId,lastSession,formClearedId,plan,result,status,live::utcMs());
     const bool needsAcknowledgement=awaiting||review;
     const bool attached=online&&!profileData.empty()&&t.value("connected",false)&&live::supportedTrailer(t)&&!body.empty();
-    for(size_t i=0;i<7;++i)EnableWindow(combos[i],attached&&!pending&&!needsAcknowledgement&&!(twoStop&&randomMiddle&&(i==3||i==4))&&(i==0||!selected[(i==3||i==5)?2:i-1].empty())&&!options[i].empty());
+    for(size_t i=0;i<7;++i)EnableWindow(combos[i],attached&&!pending&&!needsAcknowledgement&&!(twoStop&&!multiDrop&&randomMiddle&&(i==3||i==4))&&(i==0||!selected[(i==3||i==5)?2:i-1].empty())&&!options[i].empty());
+    if(multiDrop&&roundTrip)EnableWindow(combos[5],FALSE);
     for(const size_t i:{3u,4u})EnableWindow(labels[i],IsWindowEnabled(combos[i]));
-    unsigned percent=50;bool percentageValid=true;try{if(twoStop)percent=remainingPercent();}catch(...){percentageValid=false;}
+    unsigned percent=50;bool percentageValid=true;try{if(twoStop&&!multiDrop)percent=remainingPercent();}catch(...){percentageValid=false;}
     EnableWindow(percentEdit,!pending&&!needsAcknowledgement);
     EnableWindow(percentSpin,!pending&&!needsAcknowledgement);
-    const bool valid=percentageValid&&catalog&&catalog->valid(route(),body)&&(!twoStop||(catalog->valid(finalRoute(),body)&&catalog->alongRoute(selected[0],selected[3],selected[5])));
-    text(dispatchButton,twoStop?"Start two-stop plan":"Dispatch job to ATS");
+    bool distanceValid=true;try{if(multiDrop)distanceValid=readPreferredKm()==preferredKm;}catch(...){distanceValid=false;}
+    const bool valid=catalog&&(multiDrop?(distanceValid&&dropCount<=availableDropCount&&ats::tripFits(*catalog,dropRoutes(),body,tripChoices)):(percentageValid&&catalog->valid(route(),body)&&(!twoStop||(catalog->valid(finalRoute(),body)&&catalog->alongRoute(selected[0],selected[3],selected[5])))));
+    text(dispatchButton,multiDrop?"Start multi-drop plan":twoStop?"Start two-stop plan":"Dispatch job to ATS");
+    for(auto control:{stopCountCombo,stopEditorCombo,selectionCombo})EnableWindow(control,!pending&&!needsAcknowledgement);
+    for(auto control:{distanceEdit,roundTripCheck})EnableWindow(control,!pending&&!needsAcknowledgement);
+    EnableWindow(stopCountCombo,!pending&&!needsAcknowledgement&&availableDropCount>=3);
+    EnableWindow(generateButton,attached&&!pending&&!needsAcknowledgement&&catalog&&catalog->valid(finalRoute(),body)&&SendMessageW(selectionCombo,CB_GETCURSEL,0,0)==0);
     EnableWindow(dispatchButton,attached&&pendingCancelId.empty()&&status.value("can_queue",false)&&!pending&&!needsAcknowledgement&&valid);
     EnableWindow(acknowledgeButton,needsAcknowledgement);
     const auto cancelReason=ats::cancelUnavailableReason(online,!profileData.empty(),!pendingCancelId.empty(),status,!lastId.empty()&&lastId!=formClearedId);
@@ -198,14 +290,14 @@ void LivePanel::render() {
             live::TrailerCapacity cap;cap.grossKg=capacity.at("gross_limit_kg");cap.chassisKg=capacity.at("chassis_mass_kg");cap.bodyKg=capacity.at("body_mass_kg");cap.volumeM3=capacity.at("volume_m3");cap.axles=capacity.at("axles");
             std::ostringstream volume;volume<<std::fixed<<std::setprecision(2)<<cap.volumeM3;
             description+="\r\nCombination ceiling: "+tonnes(cap.payloadKg())+" payload / "+volume.str()+" m³";
-            if(catalog&&catalog->cargo.count(selected[2])){const auto& c=catalog->cargo.at(selected[2]);const auto maximum=cap.maximumUnits(c.unitKg,c.unitM3);if(maximum){description+="\r\nFull-load estimate: "+std::to_string(maximum)+" units / "+tonnes(maximum*c.unitKg);if(twoStop&&percentageValid)try{const auto remain=live::remainingUnits(maximum,percent);description+=" | final "+std::to_string(percent)+"%: "+std::to_string(remain)+" units / "+tonnes(remain*c.unitKg);}catch(...){description+=" | remaining portion needs at least one whole unit.";}}}
+            if(catalog&&catalog->cargo.count(selected[2])){const auto& c=catalog->cargo.at(selected[2]);const auto maximum=cap.maximumUnits(c.unitKg,c.unitM3);if(maximum){description+="\r\nFull-load estimate: "+std::to_string(maximum)+" units / "+tonnes(maximum*c.unitKg);if(twoStop&&!multiDrop&&percentageValid)try{const auto remain=live::remainingUnits(maximum,percent);description+=" | final "+std::to_string(percent)+"%: "+std::to_string(remain)+" units / "+tonnes(remain*c.unitKg);}catch(...){description+=" | remaining portion needs at least one whole unit.";}}}
         }
         text(trailerText,description);
     }
-    text(help,twoStop?(randomMiddle?"Choose Final delivery. A compatible first city and company are picked randomly.\r\nFirst leg: maximum load. Final leg: selected percentage. Shift+F9 opens Dispatch.":"Choose either delivery city first. First delivery follows the route to Final.\r\nFirst leg: maximum load. Final leg: selected percentage. Shift+F9 opens Dispatch."):"Compatible cargo only. Jobs use the maximum whole-unit load.\r\nShift+F9 opens Dispatch Companion from ATS.");
+    text(help,multiDrop?"Choose pickup and final destination, then Generate stops or select each delivery manually.\r\nEven cargo split; all trailers stay attached. Final destination counts as one stop.":twoStop?(randomMiddle?"Choose Final delivery. A compatible first city and company are picked randomly.\r\nFirst leg: maximum load. Final leg: selected percentage. Shift+F9 opens Dispatch.":"Choose either delivery city first. First delivery follows the route to Final.\r\nFirst leg: maximum load. Final leg: selected percentage. Shift+F9 opens Dispatch."):"Compatible cargo only. Jobs use the maximum whole-unit load.\r\nShift+F9 opens SplitHaul from ATS.");
     std::string message;
     if(!sendError.empty())message=sendError;
-    else if(awaiting)message=(resultState=="cancelled"?"Job cancelled.":savedPlan?"Both deliveries completed successfully.":"Delivery completed successfully.")+std::string("\r\nAcknowledge completion to clear this form and choose a new job.");
+    else if(awaiting)message=(resultState=="cancelled"?"Job cancelled.":savedPlan?"All deliveries completed successfully.":"Delivery completed successfully.")+std::string("\r\nAcknowledge completion to clear this form and choose a new job.");
     else if(review)message="ATS has no active job. The previous session has no delivery receipt.\r\nUse Acknowledge completion if you have verified that delivery finished.";
     else if(!online&&gameClosed)message="ATS has closed. Your dispatch details are retained.\r\nAfter reopening ATS, load your profile and bring this app forward to review the delivery.";
     else if(!online)message=offlineReason.empty()?"Start ATS and load your single-player test profile. The live dispatcher must be installed.":offlineReason;
@@ -221,7 +313,8 @@ void LivePanel::render() {
     if(pending&&status.value("state",std::string()).rfind("request_waiting_",0)==0)message="Request received. Return to Drive, keep the truck stopped and attach the supported owned combination.";
     if(savedPlan&&currentSession&&!plan.empty()&&!formClean&&!awaiting) {
         if(planState=="waiting_handoff"||planState=="complete"||planState=="stopped"||planState=="uncertain")message=plan.value("message",std::string());
-        message+="\r\nTwo-stop plan: "+planState;
+        message+="\r\n"+std::string(plan.value("multi_drop",false)?"Multi-drop plan: ":"Two-stop plan: ")+planState;
+        if(plan.value("multi_drop",false))message+=" | delivery "+std::to_string(plan.value("current_stop",1u))+" of "+std::to_string(plan.value("stop_count",3u));
     }
     if(!historyError.empty())message+="\r\nHistory: "+historyError;
     if(!cancelMessage.empty())message+="\r\n"+cancelMessage;
@@ -243,9 +336,21 @@ void LivePanel::render() {
     else if(formClean)jobDescription="Previous dispatch finished. Choose a new route above.";
     else if(!lastId.empty())jobDescription="Last dispatch: "+lastId+(currentSession?std::string():"\r\nThis dispatch belongs to an earlier game session.");
     else if(catalog)jobDescription=std::to_string(catalog->locations.size())+" ATS city records loaded. Each chosen depot is checked in the running economy before assignment.";
-    if(savedPlan&&!plan.empty()&&!formClean&&!awaiting)jobDescription+="\r\n"+std::string(planState.rfind("second_",0)==0?"FINAL LEG":"TWO-STOP PLAN")+(currentSession?std::string():" — earlier session; no automatic resume");
+    if(savedPlan&&!plan.empty()&&!formClean&&!awaiting)jobDescription+="\r\n"+std::string(plan.value("multi_drop",false)?"MULTI-DROP PLAN":planState.rfind("second_",0)==0?"FINAL LEG":"TWO-STOP PLAN")+(currentSession?std::string():" — earlier session; no automatic resume");
     if(savedPlan&&!formClean&&plan.value("initial_units",0u))jobDescription+=" | "+tonnes(plan.value("initial_mass_kg",0.0))+" → "+tonnes(plan.value("remaining_mass_kg",0.0));
+    if(savedPlan&&plan.value("multi_drop",false)&&!formClean)for(size_t i=0;i<plan.at("drops").size();++i){const auto& drop=plan.at("drops")[i];const auto r=live::parseRoute(drop.at("route"));const auto name=catalog&&catalog->cityNames.count(r.targetCity)?catalog->cityNames.at(r.targetCity):dispatch::displayToken(r.targetCity);jobDescription+="\r\n"+std::to_string(i+1)+". "+name+" | unload "+tonnes(drop.value("unload_units",0u)*plan.value("unit_mass_kg",0.0));}
     if(historyRows)jobDescription+="\r\nJob history: "+std::to_string(historyRows)+" finished jobs.";
+    if(multiDrop&&!pending&&!needsAcknowledgement) {
+        auto cityName=[&](const std::string& id){return id.empty()?std::string("Choose city"):catalog&&catalog->cityNames.count(id)?catalog->cityNames.at(id):dispatch::displayToken(id);};
+        jobDescription="MULTI-DROP PREVIEW | "+std::to_string(dropCount)+" deliveries\r\nPickup: "+cityName(selected[0]);
+        const auto routes=dropRoutes();uint32_t units=0;double unitKg=0;
+        try{const auto cap=status.at("trailer_capacity");live::TrailerCapacity capacity;capacity.grossKg=cap.at("gross_limit_kg");capacity.chassisKg=cap.at("chassis_mass_kg");capacity.bodyKg=cap.at("body_mass_kg");capacity.volumeM3=cap.at("volume_m3");capacity.axles=cap.at("axles");const auto& cargo=catalog->cargo.at(selected[2]);unitKg=cargo.unitKg;units=capacity.maximumUnits(unitKg,cargo.unitM3);if(units<dropCount)units=0;}catch(...){}
+        for(size_t i=0;i<routes.size();++i){const auto& r=routes[i];const auto company=r.targetCompany.empty()?"Choose company":catalog&&catalog->companyNames.count(r.targetCompany)?catalog->companyNames.at(r.targetCompany):dispatch::displayToken(r.targetCompany);jobDescription+="\r\n"+std::to_string(i+1)+". "+cityName(r.targetCity)+" / "+company+(i+1==routes.size()?" (final)":"");if(units){const auto before=live::multiDropRemaining(units,dropCount,static_cast<unsigned>(i)),after=live::multiDropRemaining(units,dropCount,static_cast<unsigned>(i+1));jobDescription+=" | unload ~"+tonnes((before-after)*unitKg);}}
+        jobDescription+="\r\n"+tripChoices.message;
+        if(catalog&&ats::validDrops(*catalog,routes,body)){const auto km=ats::tripKm(*catalog,routes);if(km>=0)jobDescription+="\r\nEstimated trip: "+std::to_string(static_cast<unsigned>(std::lround(km)))+" km"+(preferredKm?" | preferred: "+std::to_string(preferredKm)+" km":"");if(!ats::tripFits(*catalog,routes,body,tripChoices))jobDescription+="\r\nThese stops exceed the route limit. Generate stops or revise the manual selection.";}
+        jobDescription+="\r\nCity-distance estimate, not road/GPS distance. Preferred distance allows 20% extra.\r\nOriginal cargo split only; all trailers remain attached.";
+    }
+    if(catalog)jobDescription+="\r\nDLC filter: "+std::to_string(catalog->loadedDlcs.size())+" map/content packages loaded by "+std::string(dispatchGame::id)+". Start the game to refresh.";
     if(online){const auto profile=currentProfile(status);if(!profile.empty())jobDescription="Welcome, "+profile+"!\r\n"+jobDescription;else jobDescription="Waiting to identify the ATS profile.\r\n"+jobDescription;}
     text(jobText,jobDescription);
 }
@@ -264,7 +369,7 @@ bool LivePanel::clearCompletedForm() {
     const auto updated=confirmed?ats::acknowledgeCompletedForm(saved,plan,result):ats::acknowledgeUnrecordedCompletion(saved,plan,result,bridgeStatus(bridge),live::utcMs());
     if(!confirmed)ats::retainUserConfirmedDelivery(profileData,bridge,updated);
     live::writeJson(profileData/dispatchGame::savedDispatch,updated);
-    selected.fill({});formClearedId=lastId;sendError.clear();lastHistorySync=0;syncHistory();choices();return true;
+    selected.fill({});intermediateDrops.assign(dropCount-1,{});editingDrop=0;refreshDropEditor();formClearedId=lastId;sendError.clear();lastHistorySync=0;syncHistory();choices();return true;
 }
 void LivePanel::syncHistory() {
     if(profileData.empty())return;
@@ -331,8 +436,11 @@ void LivePanel::tick() {
     try{status=bridgeStatus(bridge);online=true;offlineReason.clear();const auto t=status.at("trailer");body=t.value("body_type",std::string());signature=t.value("signature",std::string());}catch(const std::exception& ex){online=false;offlineReason=ex.what();status=live::Json::object();body.clear();signature.clear();}
     if(online){uint64_t created=0;if(runningGame(status,&created)&&created){observedGame=status;observedGameCreated=created;gameClosed=false;connectedDuringRun=true;}}
     else if(observedGameExited(observedGame,observedGameCreated))gameClosed=true;
-    const auto profile=online?currentProfile(status):std::string();const bool profileChanged=profile!=displayedProfile;
-    if(profileChanged){loadProfile(profile);lastHistorySync=0;historyRows=0;historyReceipt.clear();historyError.clear();displayedProfile=profile;const auto caption=wide(profile.empty()?"Dispatch Companion":profile+" Dispatch");SendMessageW(parent,ProfileTitleMessage,reinterpret_cast<WPARAM>(&profile),reinterpret_cast<LPARAM>(caption.c_str()));}
+    const auto gameLog=online?currentGameLog(status):std::string();
+    const auto profile=ats::selectedProfileFromLog(gameLog);const bool profileChanged=profile!=displayedProfile;
+    const auto session=online?status.value("session_id",std::string())+profile:std::string();bool dlcChanged=false;
+    if(catalog&&session!=dlcSession){const auto loaded=ats::mountedDlcs(gameLog);dlcChanged=loaded!=catalog->loadedDlcs;catalog->loadedDlcs=loaded;dlcSession=session;tripKey.clear();}
+    if(profileChanged){loadProfile(profile);lastHistorySync=0;historyRows=0;historyReceipt.clear();historyError.clear();displayedProfile=profile;const auto caption=wide(profile.empty()?"SplitHaul by grumpyman":"SplitHaul by grumpyman — "+profile);SendMessageW(parent,ProfileTitleMessage,reinterpret_cast<WPARAM>(&profile),reinterpret_cast<LPARAM>(caption.c_str()));}
     std::string activeId=lastId;
     if(savedPlan&&!lastId.empty())try {
         plan=live::readJson(bridge/"plans"/(lastId+".json"));
@@ -365,7 +473,7 @@ void LivePanel::tick() {
         clearCompletedForm();
     }catch(const std::exception& ex){sendError=ex.what();}
     const bool pickupDefaulted=defaultPickupCity();
-    if(pickupDefaulted||profileChanged||oldBody!=body||oldSignature!=signature||wasOnline!=online||options[0].empty())choices();
+    if(pickupDefaulted||profileChanged||dlcChanged||oldBody!=body||oldSignature!=signature||wasOnline!=online||options[0].empty())choices();
     if(visible)render();
     if(visible&&online&&!reviewPromptPosted&&GetForegroundWindow()==parent&&!IsIconic(parent)&&reviewedSession!=status.value("session_id",std::string())&&ats::canConfirmUnrecordedCompletion(savedPlan,lastId,lastSession,formClearedId,plan,result,status,live::utcMs()))try {
         const auto saved=live::readJson(profileData/dispatchGame::savedDispatch);
@@ -393,35 +501,60 @@ void LivePanel::send() {
     if(ats::awaitingAcknowledgement(savedPlan,lastId,lastSession,formClearedId,plan,result)||ats::canConfirmUnrecordedCompletion(savedPlan,lastId,lastSession,formClearedId,plan,result,status,live::utcMs()))throw std::runtime_error("Acknowledge the previous delivery before starting another dispatch.");
     if(!catalog)throw std::runtime_error(catalogError);
     const auto fresh=bridgeStatus(bridge);const auto t=fresh.at("trailer");const auto currentBody=t.value("body_type",std::string());
+    catalog->loadedDlcs=ats::mountedDlcs(currentGameLog(fresh));
+    if(multiDrop){preferredKm=readPreferredKm();body=currentBody;status=fresh;refreshTripChoices();saveTripPreferences();}
     if(!fresh.value("can_queue",false)||!t.value("connected",false)||!live::supportedTrailer(t))throw std::runtime_error("ATS is not ready for another dispatch. Check the trailer and active job.");
     if(!catalog->valid(route(),currentBody))throw std::runtime_error("The selected job is incompatible with the current trailer or company data.");
-    if(twoStop&&(!catalog->valid(finalRoute(),currentBody)||!catalog->alongRoute(selected[0],selected[3],selected[5])))throw std::runtime_error("Choose a first delivery along the route to the final city, with both depots accepting this cargo.");
+    if(twoStop&&!multiDrop&&(!catalog->valid(finalRoute(),currentBody)||!catalog->alongRoute(selected[0],selected[3],selected[5])))throw std::runtime_error("Choose a first delivery along the route to the final city, with both depots accepting this cargo.");
     live::Request r;r.id=live::uniqueId();r.session=fresh.at("session_id");r.context=fresh.at("context_id");r.trailer=t.at("signature");r.created=live::utcMs();r.expires=r.created+120000;r.route=route();
-    r.twoStop=twoStop;if(twoStop){r.finalRoute=finalRoute();r.secondId=live::uniqueId();r.remainingPercent=remainingPercent();}
+    r.twoStop=twoStop;if(twoStop){r.finalRoute=finalRoute();r.secondId=live::uniqueId();if(!multiDrop)r.remainingPercent=remainingPercent();}
+    if(multiDrop){r.dropRoutes=dropRoutes();if(dropCount>availableDropCount||!ats::tripFits(*catalog,r.dropRoutes,currentBody,tripChoices))throw std::runtime_error("Choose distinct compatible stops within the route distance. Only the final delivery can return to the pickup city, at a different company.");r.route=r.dropRoutes.front();for(size_t i=0;i<r.dropRoutes.size();++i)r.dropIds.push_back(i?live::uniqueId():r.id);r.secondId=r.dropIds.back();}
+    live::parseRequest(live::requestJson(r));
     // Persist the identifier first, so reopening the app can recover its result.
     live::Json saved={{"route",live::routeJson(r.route)},{"last_request_id",r.id},{"session_id",r.session},{"submitted_utc_ms",r.created},{"two_stop",twoStop}};
     if(twoStop){saved["final_route"]=live::routeJson(r.finalRoute);saved["second_request_id"]=r.secondId;}
+    if(multiDrop){saved["multi_drop"]=true;saved["drops"]=live::requestJson(r).at("drops");saved["preferred_km"]=preferredKm;saved["round_trip"]=roundTrip;}
     saved["remaining_percent"]=r.remainingPercent;
     uint64_t gameCreated=0;if(!runningGame(fresh,&gameCreated)||!gameCreated)throw std::runtime_error("ATS process changed before dispatch. Please retry after it reconnects.");saved["game_process_id"]=fresh.at("pid");saved["game_process_created_utc_ms"]=gameCreated;
     const auto ownershipDir=profileData/"owned_requests";std::filesystem::create_directories(ownershipDir);
     for(const auto& id:{r.id,r.secondId})if(!id.empty())live::writeJson(ownershipDir/(id+".json"),live::Json{{"request_id",id},{"session_id",r.session}},false);
+    if(multiDrop)for(size_t i=1;i+1<r.dropIds.size();++i)live::writeJson(ownershipDir/(r.dropIds[i]+".json"),live::Json{{"request_id",r.dropIds[i]},{"session_id",r.session}},false);
     live::writeJson(profileData/dispatchGame::savedDispatch,saved);
     lastId=r.id;lastSession=r.session;submitted=r.created;savedPlan=twoStop;formClearedId.clear();reviewedSession.clear();result=live::Json::object();plan=live::Json::object();
     try{live::writeJson(bridge/"request.json",live::requestJson(r),false);sendError.clear();}catch(...){lastId.clear();throw;}
     tick();
 }
 bool LivePanel::command(int id,int notification) {
+    if(multiDrop&&!syncing&&((id==413&&notification==EN_KILLFOCUS)||(id==414&&notification==BN_CLICKED))){
+        if(shouldWarnOnClose()||ats::awaitingAcknowledgement(savedPlan,lastId,lastSession,formClearedId,plan,result))return true;
+        try{preferredKm=readPreferredKm();if(id==414){roundTrip=SendMessageW(roundTripCheck,BM_GETCHECK,0,0)==BST_CHECKED;selected[5]=roundTrip?selected[0]:std::string();selected[6].clear();intermediateDrops.assign(dropCount-1,{});selected[3].clear();selected[4].clear();}saveTripPreferences();tripKey.clear();sendError.clear();choices();}catch(const std::exception& ex){sendError=ex.what();}render();return true;
+    }
+    if(multiDrop&&id==413&&notification==EN_CHANGE&&!syncing&&statusText){render();return true;}
+    if(multiDrop&&((id>=409&&id<=411&&notification==CBN_SELCHANGE)||(id==412&&notification==BN_CLICKED))) {
+        if(shouldWarnOnClose()||ats::awaitingAcknowledgement(savedPlan,lastId,lastSession,formClearedId,plan,result))return true;
+        sendError.clear();
+        try {
+            intermediateDrops.at(editingDrop)={selected[3],selected[4]};
+            if(id==409){const auto chosen=SendMessageW(stopCountCombo,CB_GETCURSEL,0,0);if(chosen<0||static_cast<unsigned>(chosen)+3>availableDropCount)throw std::runtime_error("Choose an available delivery count for this route.");dropCount=static_cast<unsigned>(chosen)+3;intermediateDrops.resize(dropCount-1);editingDrop=(std::min)(editingDrop,dropCount-2);refreshDropEditor();}
+            if(id==410){const auto chosen=SendMessageW(stopEditorCombo,CB_GETCURSEL,0,0);if(chosen>=0&&static_cast<size_t>(chosen)<intermediateDrops.size())editingDrop=static_cast<unsigned>(chosen);}
+            selected[3]=intermediateDrops[editingDrop][0];selected[4]=intermediateDrops[editingDrop][1];
+            if(id==412){generateDrops();saveTripPreferences();}else choices();
+        }catch(const std::exception& ex){sendError=ex.what();}
+        render();return true;
+    }
     if(id==503&&notification==BN_CLICKED){try{requestCancel();}catch(const std::exception& e){sendError=e.what();}render();return true;}
     if(id==502&&notification==BN_CLICKED){if(reviewPromptPosted)return true;reviewPromptPosted=true;try{clearCompletedForm();}catch(const std::exception& e){sendError=e.what();}reviewPromptPosted=false;render();return true;}
     if(id==407&&notification==EN_CHANGE&&!syncing&&percentEdit&&statusText){sendError.clear();render();return true;}
     if(id>=400&&id<407&&notification==CBN_SELCHANGE&&!syncing){
-        const auto i=static_cast<size_t>(id-400);if(twoStop&&randomMiddle&&(i==3||i==4))return true;
+        const auto i=static_cast<size_t>(id-400);if(twoStop&&!multiDrop&&randomMiddle&&(i==3||i==4))return true;
         const auto n=SendMessageW(combos[i],CB_GETCURSEL,0,0);selected[i]=n>=0&&static_cast<size_t>(n)<options[i].size()?options[i][static_cast<size_t>(n)].id:std::string();
         if(i<3)for(size_t k=i+1;k<7;++k)selected[k].clear();
         else if(i==3||i==5)selected[i+1].clear();
-        if(twoStop&&randomMiddle&&i==5){selected[3].clear();selected[4].clear();}
+        if(twoStop&&!multiDrop&&randomMiddle&&i==5){selected[3].clear();selected[4].clear();}
+        if(multiDrop&&i==5){roundTrip=selected[5]==selected[0]&&!selected[0].empty();SendMessageW(roundTripCheck,BM_SETCHECK,roundTrip?BST_CHECKED:BST_UNCHECKED,0);try{saveTripPreferences();}catch(const std::exception& ex){sendError=ex.what();}}
+        if(multiDrop){if(i<3||i==5){intermediateDrops.assign(dropCount-1,{});selected[3].clear();selected[4].clear();}else intermediateDrops.at(editingDrop)={selected[3],selected[4]};}
         sendError.clear();choices();
-        if(twoStop&&i==5&&selected[3].empty()&&!options[3].empty()){
+        if(twoStop&&!multiDrop&&i==5&&selected[3].empty()&&!options[3].empty()){
             selected[3]=options[3].front().id;selected[4].clear();choices();
             if(!options[4].empty()){selected[4]=options[4].front().id;choices();}
         }

@@ -14,6 +14,11 @@ public:
     live::Json snapshot() const;
     std::map<std::string,Cargo> cargo;
     std::map<std::string,std::string> cityNames,companyNames;
+    std::map<std::string,std::string> cityCountries;
+    std::map<std::string,std::set<std::string>> depotPackages;
+    bool filterDlcs=false;
+    std::set<std::string> loadedDlcs;
+    bool depotAvailable(const std::string& city,const std::string& company) const;
     std::map<std::string,std::set<std::string>> locations,outgoing,incoming;
     std::map<std::string,std::array<double,2>> positions;
     std::vector<Choice> sourceCities(const std::string& body) const;

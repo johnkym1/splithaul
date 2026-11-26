@@ -6,7 +6,7 @@
   headers. The SCS SDK license is retained at
   `native_job_bridge/vendor/scs_sdk_1_16/sdk_license.txt`.
 
-Dispatch Companion is an independent project and is not endorsed by SCS
+SplitHaul by grumpyman is an independent project and is not endorsed by SCS
 Software. Game assets and executable files are not included in this source
 repository.
 

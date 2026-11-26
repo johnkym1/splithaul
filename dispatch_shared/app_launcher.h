@@ -30,7 +30,9 @@ inline Paths parseRegistration(const live::Json& j) {
     const auto exe=j.at("executable").get<std::string>(),project=j.at("project").get<std::string>();
     if(exe.size()>32760||project.size()>32760||exe.find('\0')!=std::string::npos||project.find('\0')!=std::string::npos)throw std::runtime_error("Invalid app launcher path length or embedded null.");
     Paths paths={std::filesystem::u8path(exe),std::filesystem::u8path(project)};
-    if(!paths.exe.is_absolute()||!paths.project.is_absolute()||_wcsicmp(paths.exe.filename().c_str(),L"DispatchPlanner.exe")!=0)throw std::runtime_error("Invalid app launcher paths.");
+    // Existing registrations remain valid while the app and DLLs are updated.
+    const bool knownName=_wcsicmp(paths.exe.filename().c_str(),L"SplitHaul.exe")==0||_wcsicmp(paths.exe.filename().c_str(),L"DispatchPlanner.exe")==0;
+    if(!paths.exe.is_absolute()||!paths.project.is_absolute()||!knownName)throw std::runtime_error("Invalid app launcher paths.");
     return paths;
 }
 inline bool registerApp(const std::filesystem::path& project) {

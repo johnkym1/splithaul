@@ -230,9 +230,20 @@ static void executeClaimed(uintptr_t registry,const live::Request& r,bool carrie
     if(context(o)!=r.context||trailer.signature()!=r.trailer){result(r,"rejected","The selected vehicle, trailer combination or profile changed.");return;}
     routeMaximumUnits=maximumForRoute(o,expectedUnitKg);
     if(!routeMaximumUnits){result(r,"rejected","The maximum cargo load could not be verified for this trailer and route.");return;}
-    expectedUnits=carried?chain.finalUnits:routeMaximumUnits;
+    expectedUnits=carried?chain.carriedUnits():routeMaximumUnits;
     if(!expectedUnits||expectedUnits>routeMaximumUnits||(carried&&std::fabs(chain.unitMassKg-expectedUnitKg)>0.01)){result(r,"rejected","The planned remaining cargo no longer fits this route or cargo definition.");return;}
-    if(r.twoStop) {
+    if(r.multiDrop()) {
+        try {
+            live::multiDropRemaining(expectedUnits,static_cast<unsigned>(r.dropRoutes.size()),0);
+            for(size_t i=1;i<r.dropRoutes.size();++i) {
+                Objects drop;reason=findObjects(drop,r.dropRoutes[i]);float unitKg=0;
+                const auto maximum=reason?0:maximumForRoute(drop,unitKg);
+                const auto remaining=live::multiDropRemaining(expectedUnits,static_cast<unsigned>(r.dropRoutes.size()),static_cast<unsigned>(i));
+                if(!maximum||remaining>maximum||std::fabs(unitKg-expectedUnitKg)>0.01)throw std::runtime_error("Delivery "+std::to_string(i+1)+": the remaining cargo does not fit, or the depot is unavailable.");
+            }
+            chain.firstUnits=expectedUnits;chain.unitMassKg=expectedUnitKg;chain.finalUnits=live::multiDropRemaining(expectedUnits,static_cast<unsigned>(r.dropRoutes.size()),static_cast<unsigned>(r.dropRoutes.size()-1));saveChain();
+        }catch(const std::exception& ex){result(r,"rejected",ex.what());return;}
+    } else if(r.twoStop) {
         Objects finalObjects;reason=findObjects(finalObjects,r.finalRoute);float finalUnitKg=0;
         const auto finalMaximum=reason?0:maximumForRoute(finalObjects,finalUnitKg);
         try {chain.firstUnits=expectedUnits;chain.finalUnits=live::remainingUnits(expectedUnits,r.remainingPercent);chain.unitMassKg=expectedUnitKg;}
@@ -262,11 +273,11 @@ static void tryHandoff(uintptr_t registry) {
     // Delivery screens briefly reset trailer configuration. Judge identity only
     // after fresh Drive samples, not during those transient menu resets.
     if(!ready||!trailer.configured||trailer.signature().empty())return;
-    if((job.active&&!job.matches(chain.first.route))||carActive||busActive){chain.stop("Another game job appeared before handover.");saveChain();return;}
+    if((job.active&&!job.matches(chain.currentRoute()))||carActive||busActive){chain.stop("Another game job appeared before handover.");saveChain();return;}
     bool empty=!job.active&&!awaiting&&!monitoring;
     for(uintptr_t off=0x28;off<=0x38;off+=8){uintptr_t active=0;empty=empty&&word(o.player+off,active)&&!active;}
     if(!chain.canHandoff(empty,same,ready)){if(!chain.active())saveChain();return;}
-    live::Request next;next.id=chain.first.secondId;next.route=chain.first.finalRoute;next.session=session;next.context=chain.first.context;next.trailer=chain.first.trailer;next.created=live::utcMs();next.expires=next.created+120000;
+    live::Request next;next.id=chain.nextId();next.route=chain.nextRoute();next.session=session;next.context=chain.first.context;next.trailer=chain.first.trailer;next.created=live::utcMs();next.expires=next.created+120000;
     // No incoming file exists for an internal handover. Reserve the second ID
     // durably without replacement before either native mutation.
     auto claimed=live::requestJson(next);claimed["handoff_from"]=chain.first.id;
@@ -277,7 +288,7 @@ static void tryHandoff(uintptr_t registry) {
 static void pollRequest(uintptr_t registry) {
     const auto incoming=folder/"request.json";if(!fs::exists(incoming))return;
     live::Request r;
-    try{r=live::parseRequest(live::readJson(incoming,8192));}catch(const std::exception&){const auto id=live::uniqueId();if(claim(incoming,id)){setState("invalid_request_rejected");}return;}
+    try{r=live::parseRequest(live::readJson(incoming,32768));}catch(const std::exception&){const auto id=live::uniqueId();if(claim(incoming,id)){setState("invalid_request_rejected");}return;}
     Objects basic;const bool world=basicObjects(basic);
     if(!live::currentRequest(r,session,world?context(basic):"",trailer.signature(),live::utcMs())){if(claim(incoming,r.id))result(r,"rejected","Request expired, or the game/profile/trailer changed. Select and dispatch again.");return;}
     if(disabled||chain.active()||awaiting||monitoring||job.active||carActive||busActive){if(claim(incoming,r.id))result(r,"rejected","A job or two-stop plan is already active, or this session is disabled.");return;}
@@ -331,7 +342,7 @@ static void openForRecoveredJob() {
         const auto receipt=live::readJson(folder/"results"/(id+".json"));
         const Json current={{"protocol",live::protocolVersion},{"game",dispatchGame::id},{"online",true},{"session_id",session},{"updated_utc_ms",live::utcMs()},{"job",job.json()}};
         if(live::routeJson(claim.route)!=receipt.at("route")||!ats::restartJobCandidate(receipt,current,id,original,live::utcMs()))return;
-        if(appHotkey::requestRecovered()){autoOpenedRequest=id;log(("[GT_TELEMETRY] Recovered job detected; opening Dispatch Companion: "+id).c_str());}
+        if(appHotkey::requestRecovered()){autoOpenedRequest=id;log(("[GT_TELEMETRY] Recovered job detected; opening SplitHaul: "+id).c_str());}
     }catch(const std::exception&){/* A missing or ambiguous saved dispatch is not a recovered job. */}
 }
 static void carryFailure(const std::string& why) {
@@ -342,7 +353,7 @@ static void prepareCarriedLoad() {
     const auto now=GetTickCount64();
     if(carryConfirming) {
         if(job.confirmedLoaded(working.route,beforeLoadRevision)&&job.payloadMatches(expectedUnits,expectedUnitKg)) {
-            carryConfirming=false;chain.state="second_active";chain.message="Final leg loaded. Follow the GPS to the final delivery.";saveChain();
+            carryConfirming=false;chain.state="second_active";chain.message="Delivery "+std::to_string(chain.dropIndex+1)+" of "+std::to_string(chain.stopCount())+" loaded. Follow the GPS.";saveChain();
             result(working,"loaded","Final leg loaded and ready for delivery. No return to pickup is needed.",navigationStatus());setState("carried_final_leg_loaded");
         }else if(now>carryDeadline||!job.matches(working.route)||(job.loadedKnown&&job.loaded&&job.payloadKnown&&!job.payloadMatches(expectedUnits,expectedUnitKg)))carryFailure("Final-leg loading/weight was not confirmed by fresh matching telemetry. Check the game; no retry.");
         return;
@@ -455,7 +466,7 @@ static void tick() {
     if(awaiting){
         if(job.assigned(working.route,beforeRevision)&&job.payloadMatches(expectedUnits,expectedUnitKg)){
             awaiting=false;monitoring=true;endedAt=0;
-            if(carryMode){carryPending=true;carryDeadline=now+30000;chain.state="second_loading";chain.message="Preparing the carried final leg.";saveChain();result(working,"assigned","Final leg assigned. Keep the truck stopped while its carried load is prepared.");}
+            if(carryMode){carryPending=true;carryDeadline=now+30000;chain.state="second_loading";chain.message="Preparing the remaining cargo for the next delivery.";saveChain();result(working,"assigned","Next delivery assigned. Keep the truck stopped while its carried load is prepared.");}
             else {pickupNavigation.arm(now);result(working,"assigned","Job assigned. Keep the truck stopped while pickup navigation is prepared.");}
             setState("job_assigned");}
         else if((job.revision>beforeRevision&&job.active)||now>deadline){awaiting=false;disabled=true;result(working,"uncertain","The native call returned, but fresh matching unloaded-job telemetry was not confirmed. Check the game; no automatic retry.");setState("disabled_uncertain_assignment");}
@@ -507,7 +518,7 @@ SCSAPI_VOID liveEvent(const scs_event_t event,const void* info,const scs_context
                     else chain.stop("The active leg was cancelled; the next leg will not be assigned.");
                     saveChain();
                 }
-                const auto message=delivered?(chain.state=="waiting_handoff"?"First delivery confirmed. Return to Drive stopped for the loaded final leg.":chain.state=="complete"?"Both deliveries confirmed. Plan complete.":"Delivery confirmed. You can dispatch another job."):"Job cancellation confirmed.";
+                const auto message=delivered?(chain.state=="waiting_handoff"?"Delivery confirmed. Return to Drive stopped for the next loaded leg.":chain.state=="complete"?"All deliveries confirmed. Plan complete.":"Delivery confirmed. You can dispatch another job."):"Job cancellation confirmed.";
                 result(working,delivered?"delivered":"cancelled",message,details);monitoring=false;resumedTracking=false;carryPending=carryConfirming=false;endedAt=0;setState(delivered?"delivery_confirmed":"cancellation_confirmed");}return;}
         if(event==SCS_TELEMETRY_EVENT_started){driving=true;menuSnapshot.beginDriving();lastSpeed=lastTrailer=lastIgnition=0;return;}
         if(event==SCS_TELEMETRY_EVENT_paused){menuSnapshot.pause(GetTickCount64(),lastSpeed,speed,lastIgnition,ignitionOn);driving=false;lastSpeed=lastTrailer=lastIgnition=0;return;}

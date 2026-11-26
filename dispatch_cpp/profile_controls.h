@@ -63,7 +63,7 @@ public:
             const auto found=std::find_if(entries[game].begin(),entries[game].end(),[&](const profileManager::Entry& entry){return entry.id==selected[game];});if(found==entries[game].end())return true;
             const auto entry=*found;const auto protection=protectionReader();
             if(profileManager::protectedEntry(entry,protection[game],profileManager::store(root,game!=0)/entry.id,activeProfile())){refresh();return true;}
-            const auto message=L"Delete the "+std::wstring(game?L"ETS2":L"ATS")+L" app profile ‘"+winText::toWide(entry.name)+L"’?\n\nThis removes its Dispatch Companion settings, history and saved dispatch data from the app. A recoverable backup is kept in deleted_profiles.\n\nYour game profile and game saves are unaffected.";
+            const auto message=L"Delete the "+std::wstring(game?L"ETS2":L"ATS")+L" app profile ‘"+winText::toWide(entry.name)+L"’?\n\nThis removes its SplitHaul settings, history and saved dispatch data from the app. A recoverable backup is kept in deleted_profiles.\n\nYour game profile and game saves are unaffected.";
             if(MessageBoxW(parent,message.c_str(),L"Delete app profile",MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2)!=IDYES)return true;
             // Recheck after confirmation: the game may have switched profiles.
             const auto latest=protectionReader();profileManager::archive(root,game!=0,entry,latest[game],activeProfile());selected[game].clear();refresh();return true;

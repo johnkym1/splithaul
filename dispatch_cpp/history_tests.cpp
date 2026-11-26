@@ -69,7 +69,7 @@ int wmain(int argc,wchar_t** argv){
         check(saved.at("route")==acknowledged.at("route")&&saved.at("last_request_id")==first,"Acknowledgement discarded receipt history or route records");
         const uint64_t reviewNow=1794803000000ULL;
         auto reviewPlan=plan;reviewPlan["state"]="second_active";auto loaded=receipt(second,"loaded",reviewNow-5000);
-        live::Json emptyGame={{"protocol",4},{"game","ats"},{"online",true},{"session_id",live::uniqueId()},{"updated_utc_ms",reviewNow},{"can_queue",true},{"job",{{"active",false}}}};
+        live::Json emptyGame={{"protocol",live::protocolVersion},{"game","ats"},{"online",true},{"session_id",live::uniqueId()},{"updated_utc_ms",reviewNow},{"can_queue",true},{"job",{{"active",false}}}};
         auto canReview=[&](const live::Json& state){return ats::canConfirmUnrecordedCompletion(true,first,session,"",reviewPlan,loaded,state,reviewNow);};
         check(canReview(emptyGame),"Previous-session final leg could not be reviewed with no active game job");
         auto activeGame=emptyGame;activeGame["job"]["active"]=true;check(!canReview(activeGame),"An active game job allowed manual completion");

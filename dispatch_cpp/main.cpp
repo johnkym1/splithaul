@@ -35,6 +35,12 @@ static bool syncing=false;
 static HINSTANCE instance=nullptr;
 static std::unique_ptr<LivePanel> livePanel;
 static HWND modeCombo=nullptr,randomCheck=nullptr;
+// Visual order is independent of persisted mode IDs from earlier releases.
+static void selectModeOption(int mode) {
+    const auto count=SendMessageW(modeCombo,CB_GETCOUNT,0,0);
+    for(LRESULT row=0;row<count;++row)if(SendMessageW(modeCombo,CB_GETITEMDATA,static_cast<WPARAM>(row),0)==mode){SendMessageW(modeCombo,CB_SETCURSEL,static_cast<WPARAM>(row),0);return;}
+}
+
 static bool liveMode=true;
 static std::unique_ptr<Branding> branding;
 static HWND logo=nullptr;
@@ -79,10 +85,10 @@ static void mode() {
     ShowWindow(firstButton,planner&&multiple?SW_SHOW:SW_HIDE);
     for(auto h:{modeCombo,modeLabel,themeButton,themeHeading,optionsHelp,aboutHeading,aboutText,donateButton,donateHelp})ShowWindow(h,optionsPage?SW_SHOW:SW_HIDE);
     SendMessageW(randomCheck,BM_SETCHECK,appOptions.random?BST_CHECKED:BST_UNCHECKED,0);
-    ShowWindow(randomCheck,optionsPage&&appOptions.mode%2==1?SW_SHOW:SW_HIDE);
+    ShowWindow(randomCheck,optionsPage&&(appOptions.mode==1||appOptions.mode==3)?SW_SHOW:SW_HIDE);
     if(profileControls)profileControls->show(optionsPage);
     if(updateControls)updateControls->show(optionsPage);
-    SetWindowTextW(optionsButton,optionsPage?L"Dispatch":L"Options");SetWindowTextW(historyButton,historyVisible?L"Dispatch":L"History");SetWindowTextW(subtitle,historyVisible?L"History":optionsPage?L"Options":modeLabels[static_cast<size_t>(appOptions.mode)]);
+    SetWindowTextW(optionsButton,optionsPage?L"Dispatch":L"Options");SetWindowTextW(historyButton,historyVisible?L"Dispatch":L"History");const auto sub=L"by grumpyman · "+std::wstring(historyVisible?L"History":optionsPage?L"Options":modeLabels[static_cast<size_t>(appOptions.mode)]);SetWindowTextW(subtitle,sub.c_str());
     if(livePanel){livePanel->setRandom(appOptions.random);livePanel->show(liveMode&&!optionsPage&&!historyVisible);}
     if(historyPage)historyPage->show(historyVisible);
     for(auto h:dispatchHeadings)ShowWindow(h,!optionsPage&&!historyVisible?SW_SHOW:SW_HIDE);
@@ -169,7 +175,7 @@ static void layout() {
     position(aboutHeading,44,392,width-88,28);position(aboutText,44,432,width-88,150);
     position(donateButton,44,594,172,36);position(donateHelp,232,594,width-276,44);
     position(optionsHelp,44,662,width-88,138);
-    const DispatchLayout page(liveMode,appOptions.mode==1||appOptions.mode==3,height);
+    const DispatchLayout page(liveMode,multipleMode(appOptions.mode),height,appOptions.mode>=4);
     const int column=(width-64)/2;
     position(dispatchHeadings[0],44,112,width-88,26);position(dispatchHeadings[1],44,page.guidanceTop+12,width-88,26);
     position(dispatchHeadings[2],44,page.actionsTop+10,width-88,26);position(dispatchHeadings[3],44,page.statusTop+12,column-40,26);position(dispatchHeadings[4],60+column,page.statusTop+12,column-40,26);
@@ -198,10 +204,10 @@ static void paintPageBoxes(HDC dc,int width,int height) {
         MoveToEx(dc,scale(divider),scale(256),nullptr);LineTo(dc,scale(divider),scale(340));
         MoveToEx(dc,scale(44),scale(648),nullptr);LineTo(dc,scale(width-44),scale(648));
     }else{
-        const DispatchLayout page(liveMode,appOptions.mode==1||appOptions.mode==3,height);
+        const DispatchLayout page(liveMode,multipleMode(appOptions.mode),height,appOptions.mode>=4);
         box(24,96,width-48,page.routeBottom-96);box(24,page.guidanceTop,width-48,page.guidanceHeight);box(24,page.actionsTop,width-48,page.actionsHeight);
         for(const int row:{0,3,5}){
-            if(row==5&&appOptions.mode!=1&&appOptions.mode!=3)continue;
+            if(row==5&&!multipleMode(appOptions.mode))continue;
             const int y=DispatchLayout::fieldTop(row)-10;
             MoveToEx(dc,scale(44),scale(y),nullptr);LineTo(dc,scale(width-44),scale(y));
         }
@@ -232,12 +238,12 @@ static void selectRunningGame(RunningGames running) {
     if(nextMode==appOptions.mode||!livePanel||livePanel->shouldWarnOnClose())return;
     try{livePanel->selectGame(nextMode>=2);}catch(const std::exception&){return;}
     historyPage->setProfile({});profileSettings.clear();
-    SetWindowTextW(window,L"Dispatch Companion");SetWindowTextW(title,L"Dispatch Companion");
+    SetWindowTextW(window,SPLITHAUL_BRAND_WIDE);SetWindowTextW(title,SPLITHAUL_NAME_WIDE);
     appOptions.mode=nextMode;liveMode=true;route=nextMode==2?etsSingle:etsMultiple;
-    SendMessageW(modeCombo,CB_SETCURSEL,nextMode,0);
-    livePanel->setTwoStop(nextMode%2==1);render();mode();layout();
+    selectModeOption(nextMode);
+    livePanel->setTwoStop(multipleMode(nextMode));livePanel->setMultiDrop(nextMode>=4);render();mode();layout();
 }
-static void error(const std::exception& ex) {MessageBoxW(window,wide(ex.what()).c_str(),L"Dispatch planner",MB_OK|MB_ICONERROR);}
+static void error(const std::exception& ex) {MessageBoxW(window,wide(ex.what()).c_str(),SPLITHAUL_NAME_WIDE,MB_OK|MB_ICONERROR);}
 static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
     try {
         switch(message) {
@@ -245,7 +251,7 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             window=hwnd;
             SetPropW(hwnd,dispatchLauncher::windowProperty,reinterpret_cast<HANDLE>(dispatchLauncher::projectKey(model->root)));
             logo=control(L"STATIC",L"",SS_OWNERDRAW,601);
-            title=control(L"STATIC",L"Dispatch companion",SS_LEFT,0);
+            title=control(L"STATIC",L"SplitHaul",SS_LEFT,0);
             subtitle=control(L"STATIC",L"",SS_LEFT,0);
             optionsButton=control(L"BUTTON",L"Options",WS_TABSTOP,301);
             historyButton=control(L"BUTTON",L"History",WS_TABSTOP,303);
@@ -253,19 +259,19 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             for(size_t i=0;i<dispatchHeadings.size();++i)dispatchHeadings[i]=control(L"STATIC",sections[i],SS_LEFT,0);
             modeLabel=control(L"STATIC",L"Game and job type",SS_LEFT,0);
             modeCombo=control(WC_COMBOBOXW,L"",WS_TABSTOP|CBS_DROPDOWNLIST|CBS_HASSTRINGS|CBS_OWNERDRAWFIXED,300);
-            for(const auto caption:modeLabels)SendMessageW(modeCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(caption));
-            SendMessageW(modeCombo,CB_SETCURSEL,appOptions.mode,0);
+            for(const int modeId:{0,1,4,2,3,5}){const auto row=SendMessageW(modeCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(modeLabels[static_cast<size_t>(modeId)]));SendMessageW(modeCombo,CB_SETITEMDATA,static_cast<WPARAM>(row),modeId);}
+            selectModeOption(appOptions.mode);
             randomCheck=control(L"BUTTON",L"Random",WS_TABSTOP|BS_AUTOCHECKBOX,305);
             themeButton=control(L"BUTTON",appOptions.dark?L"Dark theme: On":L"Dark theme: Off",WS_TABSTOP,302);
             themeHeading=control(L"STATIC",L"Appearance",SS_LEFT,0);
-            optionsHelp=control(L"STATIC",L"When one simulator is running, its game is selected automatically. Switching games starts in single mode; the current game's single or multiple choice is kept.\n\nAttach an owned combination: up to 3 trailers in ATS or 2 in ETS2. Recognised dollies are excluded. Cancellation needs a supported DLL and a stopped truck in the game menu.",SS_LEFT,0);
-            aboutHeading=control(L"STATIC",L"About Dispatch Companion",SS_LEFT,0);
+            optionsHelp=control(L"STATIC",L"When one simulator is running, its game is selected automatically. Switching games starts in single mode; the current game's delivery mode is kept. Multi-drop supports 3-8 deliveries with all trailers attached.\n\nAttach an owned combination: up to 3 trailers in ATS or 2 in ETS2. Recognised dollies are excluded. Cancellation needs a supported DLL and a stopped truck in the game menu.",SS_LEFT,0);
+            aboutHeading=control(L"STATIC",L"About SplitHaul",SS_LEFT,0);
             aboutText=control(L"STATIC",
-                L"Made by " DISPATCH_AUTHOR_WIDE L" · Version " DISPATCH_VERSION_WIDE L" (development)\n"
+                SPLITHAUL_BRAND_WIDE L" · Version " DISPATCH_VERSION_WIDE L" (development)\n"
                 L"Updated " DISPATCH_RELEASE_DATE_WIDE L"\n"
                 L"GitHub: johnkym1\n\n"
                 L"Created in November 2026 for single-player ATS and ETS2 drivers. "
-                L"Dispatch Companion helps you plan compatible loads, dispatch single or two-stop jobs, "
+                L"SplitHaul helps you plan compatible loads, dispatch single, dual or multi-drop jobs, "
                 L"and keep an exportable delivery history.",SS_LEFT,0);
             donateButton=control(L"BUTTON",L"Donate here",WS_TABSTOP,304);
             EnableWindow(donateButton,appLinks::donationAvailable);
@@ -286,7 +292,7 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             historyPage=std::make_unique<HistoryPage>(hwnd,instance,model->root,theme);
             profileControls=std::make_unique<ProfileControls>(hwnd,model->root,[]{return livePanel?livePanel->activeProfileData():fs::path();});
             updateControls=std::make_unique<UpdateControls>(hwnd);
-            livePanel->setTwoStop(appOptions.mode%2==1);
+            livePanel->setTwoStop(multipleMode(appOptions.mode));livePanel->setMultiDrop(appOptions.mode>=4);
             fonts();theme.apply(hwnd,appOptions.dark);historyPage->applyTheme();render();mode();layout();SetTimer(hwnd,1,1000,nullptr);return 0;
         }
         case WM_COMMAND: {
@@ -307,16 +313,17 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             }
             if(id==302&&HIWORD(wp)==BN_CLICKED){auto next=appOptions;next.dark=!next.dark;saveCurrentOptions(next);appOptions=next;SetWindowTextW(themeButton,appOptions.dark?L"Dark theme: On":L"Dark theme: Off");theme.apply(hwnd,appOptions.dark);historyPage->applyTheme();return 0;}
             if(id==300&&HIWORD(wp)==CBN_SELCHANGE){
-                auto next=appOptions;next.mode=static_cast<int>(SendMessageW(modeCombo,CB_GETCURSEL,0,0));
-                const bool changingGame=(next.mode>=2)!=(appOptions.mode>=2);
-                if(changingGame&&livePanel->shouldWarnOnClose()){SendMessageW(modeCombo,CB_SETCURSEL,appOptions.mode,0);throw std::runtime_error("Finish the current game job before switching games in Dispatch Companion.");}
+                auto next=appOptions;const auto row=SendMessageW(modeCombo,CB_GETCURSEL,0,0);if(row==CB_ERR)return 0;next.mode=static_cast<int>(SendMessageW(modeCombo,CB_GETITEMDATA,static_cast<WPARAM>(row),0));
+                if(next.mode!=appOptions.mode&&livePanel->shouldWarnOnClose()){selectModeOption(appOptions.mode);throw std::runtime_error("Finish the current delivery plan before changing its game or delivery mode.");}
+                const bool changingGame=etsMode(next.mode)!=etsMode(appOptions.mode);
+                if(changingGame&&livePanel->shouldWarnOnClose()){selectModeOption(appOptions.mode);throw std::runtime_error("Finish the current game job before switching games in SplitHaul.");}
                 if(changingGame){
-                    try{livePanel->selectGame(next.mode>=2);}catch(...){SendMessageW(modeCombo,CB_SETCURSEL,appOptions.mode,0);throw;}
-                    historyPage->setProfile({});profileSettings.clear();SetWindowTextW(hwnd,L"Dispatch Companion");SetWindowTextW(title,L"Dispatch Companion");
+                    try{livePanel->selectGame(etsMode(next.mode));}catch(...){selectModeOption(appOptions.mode);throw;}
+                    historyPage->setProfile({});profileSettings.clear();SetWindowTextW(hwnd,SPLITHAUL_BRAND_WIDE);SetWindowTextW(title,SPLITHAUL_NAME_WIDE);
                 }else saveCurrentOptions(next);
                 saveOptions(model->root,next);
                 if(appOptions.mode==2)etsSingle=route;else if(appOptions.mode==3)etsMultiple=route;
-                appOptions=next;liveMode=true;route=appOptions.mode==2?etsSingle:etsMultiple;livePanel->setTwoStop(appOptions.mode%2==1);render();mode();layout();return 0;
+                appOptions=next;liveMode=true;route=appOptions.mode==2?etsSingle:etsMultiple;livePanel->setTwoStop(multipleMode(appOptions.mode));livePanel->setMultiDrop(appOptions.mode>=4);render();mode();layout();return 0;
             }
             if(livePanel&&livePanel->command(id,HIWORD(wp)))return 0;
             if(historyPage&&historyPage->command(id,HIWORD(wp)))return 0;
@@ -338,20 +345,20 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case LivePanel::RestartReviewMessage:if(livePanel)livePanel->reviewRestart();return 0;
         case LivePanel::ProfileTitleMessage:{
             const auto caption=reinterpret_cast<const wchar_t*>(lp);const auto profile=reinterpret_cast<const std::string*>(wp);
-            if(caption){SetWindowTextW(hwnd,caption);if(title)SetWindowTextW(title,caption);}
+            if(caption){SetWindowTextW(hwnd,caption);if(title)SetWindowTextW(title,SPLITHAUL_NAME_WIDE);}
             if(profile&&!profile->empty()){
                 const auto path=ats::ensureProfileFiles(model->root,*profile)/"settings.config";
                 const auto data=live::readJson(path);if(data.value("profile_name",std::string())!=*profile)throw std::runtime_error("Profile settings do not match the current game profile.");
-                auto next=decodeOptions(data);next.mode=(dispatchGame::isETS2()?2:0)+(next.mode%2);profileSettings=path;appOptions=next;liveMode=true;
-                if(modeCombo)SendMessageW(modeCombo,CB_SETCURSEL,next.mode,0);
+                auto next=decodeOptions(data);next.mode=modeForGame(next.mode,dispatchGame::isETS2());profileSettings=path;appOptions=next;liveMode=true;
+                if(modeCombo)selectModeOption(next.mode);
                 if(themeButton)SetWindowTextW(themeButton,next.dark?L"Dark theme: On":L"Dark theme: Off");
-                if(livePanel){route=next.mode==2?etsSingle:etsMultiple;livePanel->setTwoStop(next.mode%2==1);theme.apply(hwnd,next.dark);if(historyPage)historyPage->applyTheme();render();mode();layout();}
+                if(livePanel){route=next.mode==2?etsSingle:etsMultiple;livePanel->setTwoStop(multipleMode(next.mode));livePanel->setMultiDrop(next.mode>=4);theme.apply(hwnd,next.dark);if(historyPage)historyPage->applyTheme();render();mode();layout();}
             }else profileSettings.clear();
             return 0;
         }
         case dispatchLauncher::showMessage:lastRunningGames=detectRunningGames();selectRunningGame(lastRunningGames);ShowWindow(hwnd,IsIconic(hwnd)?SW_RESTORE:SW_SHOW);SetForegroundWindow(hwnd);return 0;
         case WM_CLOSE:
-            if(livePanel&&livePanel->shouldWarnOnClose()&&MessageBoxW(hwnd,L"A delivery or two-stop plan is active. Keep Dispatch Companion open while delivering to monitor load weights and the next stop.\n\nClosing this app does not cancel the assigned job. Close it anyway?",L"Keep Dispatch Companion open",MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2)!=IDYES)return 0;
+            if(livePanel&&livePanel->shouldWarnOnClose()&&MessageBoxW(hwnd,L"A delivery plan is active. Keep SplitHaul open while delivering to monitor load weights and the next stop.\n\nClosing this app does not cancel the assigned job. Close it anyway?",L"Keep SplitHaul open",MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2)!=IDYES)return 0;
             DestroyWindow(hwnd);return 0;
         case WM_DRAWITEM:{const auto item=reinterpret_cast<DRAWITEMSTRUCT*>(lp);if(item&&item->CtlID==601&&branding){branding->paint(*item,theme.backgroundHandle());return TRUE;}if(item&&theme.draw(*item))return TRUE;break;}
         case WM_MEASUREITEM:{const auto item=reinterpret_cast<MEASUREITEMSTRUCT*>(lp);if(item&&item->CtlType==ODT_COMBOBOX){item->itemHeight=static_cast<UINT>(scale(24));return TRUE;}break;}
@@ -372,14 +379,14 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
 static fs::path dataRoot() {
     int argc=0;LPWSTR* argv=CommandLineToArgvW(GetCommandLineW(),&argc);if(!argv)throw std::runtime_error("Cannot read command line.");
     fs::path selected;
-    for(int i=1;i<argc;++i){if(std::wstring(argv[i])==L"--data-dir"&&i+1<argc)selected=argv[++i];else{LocalFree(argv);throw std::runtime_error("Usage: DispatchPlanner.exe [--data-dir folder]");}}
+    for(int i=1;i<argc;++i){if(std::wstring(argv[i])==L"--data-dir"&&i+1<argc)selected=argv[++i];else{LocalFree(argv);throw std::runtime_error("Usage: SplitHaul.exe [--data-dir folder]");}}
     LocalFree(argv);if(!selected.empty()){customDataRoot=true;return fs::absolute(selected);}
     wchar_t name[32768];const DWORD count=GetModuleFileNameW(nullptr,name,32768);if(!count||count>=32768)throw std::runtime_error("Cannot locate this executable.");
     fs::path root=fs::path(name).parent_path();
     if(fs::exists(root/"installed-layout.json")) {
         PWSTR local=nullptr;
         if(FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData,0,nullptr,&local)))throw std::runtime_error("Cannot locate your local app-data folder.");
-        const auto userData=fs::path(local)/"Grumpyman"/"DispatchCompanion";CoTaskMemFree(local);
+        const auto userData=installedStorage::userDataRoot(fs::path(local));CoTaskMemFree(local);
         return installedStorage::prepare(root,userData);
     }
     for(int i=0;i<5;++i){if(fs::exists(root/"company_catalog.json")||fs::is_directory(root/"game_data"/"base"/"def"/"company"))return root;root=root.parent_path();}
@@ -397,20 +404,20 @@ int WINAPI wWinMain(HINSTANCE app,HINSTANCE,PWSTR,int show) {
         model=std::make_unique<Model>(root);etsMultiple=loadState(root);etsSingle=fs::exists(root/"dispatch_single.json")?decodeState(readJson(root/"dispatch_single.json")):State{};
         int fallbackMode=0;if(fs::exists(root/"ats_dispatch.json"))fallbackMode=readJson(root/"ats_dispatch.json").value("two_stop",false)?1:0;
         appOptions=loadOptions(root,fallbackMode);lastRunningGames=detectRunningGames();appOptions.mode=modeForRunningGame(appOptions.mode,lastRunningGames);liveMode=true;route=appOptions.mode==2?etsSingle:etsMultiple;
-        dispatchGame::select(appOptions.mode>=2);
+        dispatchGame::select(etsMode(appOptions.mode));
         bool launcherRegistered=true;
         if(!customDataRoot){
             dispatchGame::select(false);launcherRegistered=dispatchLauncher::registerApp(root);
             dispatchGame::select(true);launcherRegistered=dispatchLauncher::registerApp(root)&&launcherRegistered;
-            dispatchGame::select(appOptions.mode>=2);
+            dispatchGame::select(etsMode(appOptions.mode));
         }
-        if(!customDataRoot&&!launcherRegistered)MessageBoxW(nullptr,L"The Shift+F9 app shortcut could not be registered. Dispatch Companion can still be used normally. Open it again after checking access to the live-dispatch folder.",L"Dispatch Companion shortcut",MB_OK|MB_ICONWARNING);
+        if(!customDataRoot&&!launcherRegistered)MessageBoxW(nullptr,L"The Shift+F9 app shortcut could not be registered. SplitHaul can still be used normally. Open it again after checking access to the live-dispatch folder.",L"SplitHaul shortcut",MB_OK|MB_ICONWARNING);
         branding=std::make_unique<Branding>(app);
         INITCOMMONCONTROLSEX common={sizeof(common),ICC_STANDARD_CLASSES|ICC_LISTVIEW_CLASSES};InitCommonControlsEx(&common);
         WNDCLASSEXW wc={};wc.cbSize=sizeof(wc);wc.hInstance=app;wc.lpfnWndProc=procedure;wc.lpszClassName=L"CppTwoStopDispatch";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);wc.hIcon=branding->largeIcon();wc.hIconSm=branding->smallIcon();wc.hbrBackground=GetSysColorBrush(COLOR_WINDOW);
         if(!RegisterClassExW(&wc))throw std::runtime_error("Cannot register the app window.");
         const UINT dpi=GetDpiForSystem();RECT r={0,0,MulDiv(780,static_cast<int>(dpi),96),MulDiv(DispatchLayout::minimumHeight,static_cast<int>(dpi),96)};AdjustWindowRectExForDpi(&r,WS_OVERLAPPEDWINDOW,FALSE,0,dpi);
-        const auto caption=L"Dispatch Companion";
+        const auto caption=SPLITHAUL_BRAND_WIDE;
         window=CreateWindowExW(0,wc.lpszClassName,caption,WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,r.right-r.left,r.bottom-r.top,nullptr,nullptr,app,nullptr);
         if(!window)throw std::runtime_error("Cannot create the app window.");
         // The opening monitor can use a different DPI from the system default.

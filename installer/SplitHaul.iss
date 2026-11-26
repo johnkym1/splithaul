@@ -6,20 +6,20 @@ AppId=Grumpyman-Dispatch-AllInOne-Isolated-Tests
 #else
 AppId={{04C09966-B3D8-4D9E-BB7B-2759517FDC82}
 #endif
-AppName=Dispatch Companion
+AppName=SplitHaul by grumpyman
 AppVersion={#AppVersion}
-AppPublisher=Grumpyman
+AppPublisher=grumpyman
 AppPublisherURL=https://github.com/johnkym1
-AppSupportURL=https://github.com/johnkym1
-DefaultDirName={autopf}\Grumpyman\Dispatch Companion
-DefaultGroupName=Grumpyman\Dispatch Companion
+AppSupportURL=https://github.com/johnkym1/splithaul
+DefaultDirName={autopf}\Grumpyman\SplitHaul
+DefaultGroupName=Grumpyman\SplitHaul
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=commandline
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir=..\dist
-OutputBaseFilename=DispatchCompanion-Setup-{#AppVersion}-win64
+OutputBaseFilename=SplitHaul-Setup-{#AppVersion}-win64
 SetupIconFile=build\grumpyman.ico
 UninstallDisplayIcon={app}\grumpyman.ico
 Compression=lzma2
@@ -29,8 +29,9 @@ InfoBeforeFile=DriverGuide.txt
 CloseApplications=no
 RestartApplications=no
 SetupLogging=yes
-UninstallDisplayName=Dispatch Companion
+UninstallDisplayName=SplitHaul by grumpyman
 UsePreviousTasks=no
+UsePreviousGroup=no
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
@@ -40,7 +41,7 @@ Name: "atsmod"; Description: "Install GT multi-trailer mod for ATS (doubles and 
 Name: "etsmod"; Description: "Install GT multi-trailer mod for ETS2 (doubles)"
 
 [Files]
-Source: "build\payload\DispatchPlanner.exe"; DestDir: "{app}"; Flags: ignoreversion; BeforeInstall: BackupApplication
+Source: "build\payload\SplitHaul.exe"; DestDir: "{app}"; Flags: ignoreversion; BeforeInstall: BackupApplication
 Source: "build\payload\installed-layout.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\payload\catalogs\*.json"; DestDir: "{app}\catalogs"; Flags: ignoreversion
 Source: "build\payload\plugins\ats\GT_Telemetry.dll"; DestDir: "{app}\plugins\ats"; Flags: ignoreversion
@@ -53,14 +54,24 @@ Source: "DriverGuide.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "TrailerMods.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Dispatch Companion"; Filename: "{app}\DispatchPlanner.exe"; IconFilename: "{app}\grumpyman.ico"
+Name: "{group}\SplitHaul"; Filename: "{app}\SplitHaul.exe"; IconFilename: "{app}\grumpyman.ico"
 Name: "{group}\Driver guide"; Filename: "{app}\DriverGuide.txt"
 Name: "{group}\Trailer mod guide"; Filename: "{app}\TrailerMods.txt"
-Name: "{group}\Uninstall Dispatch Companion"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Dispatch Companion"; Filename: "{app}\DispatchPlanner.exe"; IconFilename: "{app}\grumpyman.ico"; Tasks: desktopicon
+Name: "{group}\Uninstall SplitHaul"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\SplitHaul"; Filename: "{app}\SplitHaul.exe"; IconFilename: "{app}\grumpyman.ico"; Tasks: desktopicon
+
+#ifndef InstallerTestBuild
+[InstallDelete]
+Type: files; Name: "{autodesktop}\Dispatch Companion.lnk"
+Type: files; Name: "{autoprograms}\Grumpyman\Dispatch Companion\Dispatch Companion.lnk"
+Type: files; Name: "{autoprograms}\Grumpyman\Dispatch Companion\Uninstall Dispatch Companion.lnk"
+Type: files; Name: "{autoprograms}\Grumpyman\Dispatch Companion\Driver guide.lnk"
+Type: files; Name: "{autoprograms}\Grumpyman\Dispatch Companion\Trailer mod guide.lnk"
+Type: dirifempty; Name: "{autoprograms}\Grumpyman\Dispatch Companion"
+#endif
 
 [Run]
-Filename: "{app}\DispatchPlanner.exe"; Description: "Open Dispatch Companion"; Flags: nowait postinstall skipifsilent runasoriginaluser unchecked
+Filename: "{app}\SplitHaul.exe"; Description: "Open SplitHaul"; Flags: nowait postinstall skipifsilent runasoriginaluser unchecked
 
 [UninstallDelete]
 Type: files; Name: "{app}\plugin-install-state.ini"
@@ -120,11 +131,11 @@ end;
 procedure CurPageChanged(CurPageID: Integer);
 begin
   if CurPageID = wpFinished then begin
-    WizardForm.FinishedHeadingLabel.Caption := 'IN GAME: PRESS SHIFT + F9 TO OPEN DISPATCH COMPANION';
+    WizardForm.FinishedHeadingLabel.Caption := 'IN GAME: PRESS SHIFT + F9 TO OPEN SPLITHAUL';
     if WizardIsTaskSelected('atsmod') or WizardIsTaskSelected('etsmod') then
-      WizardForm.FinishedLabel.Caption := 'Dispatch Companion and the selected game files are installed.' + #13#10 + #13#10 +
+      WizardForm.FinishedLabel.Caption := 'SplitHaul and the selected game files are installed.' + #13#10 + #13#10 +
         'Before loading your profile, open the game''s Mod Manager and enable GT Multi-Trailer Combinations for that game. Already enabled? Keep that same mod entry enabled.' + #13#10 + #13#10 +
-        'See the Trailer mod guide in the Start menu for the new combinations. Start Dispatch Companion once before using Shift + F9.';
+        'See the Trailer mod guide in the Start menu for the new combinations. Start SplitHaul once before using Shift + F9.';
   end;
 end;
 
@@ -165,14 +176,14 @@ begin
   Result := '';
   Exe := AddBackslash(Folder) + 'bin\win_x64\' + ExeName;
   if not FileExists(Exe) then Result := 'Choose the correct ' + Game + ' folder. Missing: ' + Exe
-  else if not SupportedHost(Game, GetSHA256OfFile(Exe)) then Result := Game + ' has an unsupported game build. No telemetry DLL was replaced. Use a compatible Dispatch Companion release.';
+  else if not SupportedHost(Game, GetSHA256OfFile(Exe)) then Result := Game + ' has an unsupported game build. No telemetry DLL was replaced. Use a compatible SplitHaul release.';
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
   try
-    if ProcessRunning('DispatchPlanner.exe') then begin Result := 'Close Dispatch Companion before installing or updating.'; Exit; end;
+    if ProcessRunning('SplitHaul.exe') or ProcessRunning('DispatchPlanner.exe') then begin Result := 'Close SplitHaul (or the previous Dispatch Companion app) before installing or updating.'; Exit; end;
     if (WizardIsTaskSelected('atsplugin') or WizardIsTaskSelected('etsplugin')) then begin
       if not IsAdminInstallMode then begin Result := 'Game-plugin installation requires administrator mode. Run Setup normally or leave the game-plugin tasks unchecked.'; Exit; end;
       if ProcessRunning('amtrucks.exe') or ProcessRunning('eurotrucks2.exe') then begin Result := 'Close ATS and ETS2 normally before replacing telemetry DLLs. No SDK reload is needed.'; Exit; end;
@@ -195,21 +206,31 @@ begin
   end;
 end;
 
-procedure BackupApplication;
+procedure BackupAppFile(FileName: String);
 var Existing, Backup: String;
 begin
-  Existing := ExpandConstant('{app}\DispatchPlanner.exe');
+  Existing := ExpandConstant('{app}\') + FileName;
   if not FileExists(Existing) then Exit;
   ForceDirectories(ExpandConstant('{app}\app-backups'));
-  Backup := ExpandConstant('{app}\app-backups\DispatchPlanner-') + GetSHA256OfFile(Existing) + '.exe';
+  Backup := ExpandConstant('{app}\app-backups\') + FileName + '.' + GetSHA256OfFile(Existing) + '.bak';
   if not FileExists(Backup) then
     if not FileCopy(Existing, Backup, True) then RaiseException('Could not save the previous app version.');
   if GetSHA256OfFile(Backup) <> GetSHA256OfFile(Existing) then RaiseException('App backup verification failed.');
 end;
 
+procedure BackupApplication;
+begin
+  BackupAppFile('SplitHaul.exe');
+  BackupAppFile('DispatchPlanner.exe');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then begin
+    if FileExists(ExpandConstant('{app}\DispatchPlanner.exe')) then begin
+      BackupAppFile('DispatchPlanner.exe');
+      if not DeleteFile(ExpandConstant('{app}\DispatchPlanner.exe')) then RaiseException('The previous app could not be retired. Its backup has been retained.');
+    end;
     if WizardIsTaskSelected('atsplugin') then InstallPlugin('ATS', ExpandConstant('{app}\plugins\ats\GT_Telemetry.dll'), GameFolders.Values[0]);
     if WizardIsTaskSelected('etsplugin') then InstallPlugin('ETS2', ExpandConstant('{app}\plugins\ets2\GT_Telemetry.dll'), GameFolders.Values[1]);
     if WizardIsTaskSelected('atsmod') then InstallTrailerMod('ATS', ExpandConstant('{app}\mods\GT_Tanker_Combinations_ATS.scs'), ModFolders.Values[0]);
@@ -221,7 +242,7 @@ function InitializeUninstall: Boolean;
 begin
   Result := False;
   try
-    if ProcessRunning('DispatchPlanner.exe') then begin SuppressibleMsgBox('Close Dispatch Companion before uninstalling.', mbError, MB_OK, IDOK); Exit; end;
+    if ProcessRunning('SplitHaul.exe') or ProcessRunning('DispatchPlanner.exe') then begin SuppressibleMsgBox('Close SplitHaul and the previous app before uninstalling.', mbError, MB_OK, IDOK); Exit; end;
     if FileExists(PluginStateFile) then
       if ProcessRunning('amtrucks.exe') or ProcessRunning('eurotrucks2.exe') then begin SuppressibleMsgBox('Close both games normally before restoring telemetry DLLs.', mbError, MB_OK, IDOK); Exit; end;
     Result := True;

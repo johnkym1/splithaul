@@ -36,3 +36,5 @@
 .vscode/
 __pycache__/
 *.pyc
+
+/multi_drop_preferences.json

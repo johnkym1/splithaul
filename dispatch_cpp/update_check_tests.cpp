@@ -2,7 +2,7 @@
 #include <iostream>
 int main(int argc,char** argv){try{
     unsigned count=0;auto check=[&](bool ok,const char* message){++count;if(!ok)throw std::runtime_error(message);};
-    auto release=[](const std::string& number,bool test=false){const auto name="DispatchCompanion-Setup-"+number+"-win64.exe";return dispatch::Json{{"tag_name","v"+number},{"html_url",std::string(updates::releasePrefix)+"v"+number},{"published_at","2026-11-24T00:00:00Z"},{"draft",false},{"prerelease",test},{"assets",dispatch::Json::array({{{"name",name},{"state","uploaded"},{"size",100}},{{"name",name+".sha256"},{"state","uploaded"},{"size",100}}})}};};
+    auto release=[](const std::string& number,bool test=false){const auto name="SplitHaul-Setup-"+number+"-win64.exe";return dispatch::Json{{"tag_name","v"+number},{"html_url",std::string(updates::releasePrefix)+"v"+number},{"published_at","2026-11-24T00:00:00Z"},{"draft",false},{"prerelease",test},{"assets",dispatch::Json::array({{{"name",name},{"state","uploaded"},{"size",100}},{{"name",name+".sha256"},{"state","uploaded"},{"size",100}}})}};};
     check(updates::version("v0.2.10")>updates::version("0.2.9"),"Version comparison is not numeric");
     for(const auto* bad:{"", "v0.2", "v0.2.9-beta", "v0.2.9/path", "v0.02.9", "999999999999.1.1", "0.2.9.0"})check(!updates::version(bad),"Malformed version accepted");
     const auto newer=release("0.2.10");auto result=updates::evaluate(dispatch::Json::array({newer}),"0.2.9");

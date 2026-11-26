@@ -6,7 +6,7 @@ namespace ats {
 struct HistoryExport {size_t rows=0;bool changed=false;};
 struct HistoryEntry {
     std::string id,session,cargo,pickupCity,pickupCompany,deliveryCity,deliveryCompany,outcome,source,plan;
-    uint64_t completedMs=0;unsigned stop=0;bool driverConfirmed=false;
+    uint64_t completedMs=0;unsigned stop=0,stopCount=0;bool driverConfirmed=false;
     std::optional<double> massKg,revenue,distanceKm,damage;
     std::optional<uint32_t> units;
 };

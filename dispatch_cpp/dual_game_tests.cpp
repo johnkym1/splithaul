@@ -15,7 +15,7 @@ int wmain(int argc,wchar_t** argv){try{
     live::Request request;request.id=live::uniqueId();request.session=live::uniqueId();request.context="context";request.trailer="trailer";request.created=1000;request.expires=2000;
     request.route={"apples","paris","depot_a","lyon","depot_b"};
     const auto atsRequest=live::requestJson(request);
-    live::Json status={{"protocol",4},{"game","ats"},{"session_id",request.session},{"updated_utc_ms",1000},{"online",true}};
+    live::Json status={{"protocol",live::protocolVersion},{"game","ats"},{"session_id",request.session},{"updated_utc_ms",1000},{"online",true}};
     check(live::freshStatus(status,1000),"ATS status rejected");
     dispatchGame::select(true);check(live::ipcFolder()!=atsBridge,"Shared game bridge path");
     check(std::wstring(dispatchGame::executable)==L"eurotrucks2.exe","Wrong game process");
@@ -25,7 +25,7 @@ int wmain(int argc,wchar_t** argv){try{
     const auto etsProfile=ats::ensureProfileFiles(temp,"Same Profile");check(etsProfile!=atsProfile,"Same named profiles collide");
     check(live::readJson(etsProfile/"settings.config").at("mode")==2,"ETS profile defaults to ATS");
     status["game"]="ets2";check(live::freshStatus(status,1000),"ETS status rejected");
-    live::Json diagnostic={{"protocol",4},{"game","ets2"},{"online",false},{"state","startup_rejected"},{"pid",42},{"updated_utc_ms",1500},{"message","Unsupported build"}};
+    live::Json diagnostic={{"protocol",live::protocolVersion},{"game","ets2"},{"online",false},{"state","startup_rejected"},{"pid",42},{"updated_utc_ms",1500},{"message","Unsupported build"}};
     check(live::startupDiagnostic(diagnostic,42,1000,2000)=="Unsupported build","ETS startup diagnostic hidden");
     check(!ats::cancelUnavailableReason(true,true,false,status,true).empty(),"ETS cancellation enabled without DLL capability");
     status["experimental_cancel_available"]=true;status["driving"]=false;status["context_id"]="context";status["cancel_target_token"]="target";

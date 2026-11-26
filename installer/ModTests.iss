@@ -1,6 +1,6 @@
 [Setup]
 AppId=Grumpyman-Installer-Mod-Tests
-AppName=Dispatch Companion Mod Installer Tests
+AppName=SplitHaul Mod Installer Tests
 AppVersion=1.0
 DefaultDirName={localappdata}\Grumpyman\ModInstallerTests
 PrivilegesRequired=lowest

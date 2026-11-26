@@ -73,7 +73,9 @@ int wmain(int argc,wchar_t** argv) {
         check(modeForRunningGame(2,RunningGames::ats)==0&&modeForRunningGame(3,RunningGames::ats)==0,"ATS did not replace an ETS2 selection with ATS single");
         check(modeForRunningGame(0,RunningGames::ats)==0&&modeForRunningGame(1,RunningGames::ats)==1,"ATS did not keep its selected job type");
         check(modeForRunningGame(3,RunningGames::none)==3&&modeForRunningGame(1,RunningGames::both)==1,"Unknown or simultaneous games changed the selected mode");
-        rejected=false;try{decodeOptions(Json{{"mode",4},{"dark_theme",true}});}catch(const std::exception&){rejected=true;}check(rejected,"Unsupported mode was accepted in app options");
+        check(decodeOptions(Json{{"mode",4}}).mode==4&&decodeOptions(Json{{"mode",5}}).mode==5,"Multi-drop modes were rejected");
+        check(modeForRunningGame(4,RunningGames::ats)==4&&modeForRunningGame(5,RunningGames::ets2)==5&&modeForRunningGame(4,RunningGames::ets2)==2&&modeForRunningGame(5,RunningGames::ats)==0,"Multi-drop running-game selection failed");
+        rejected=false;try{decodeOptions(Json{{"mode",6},{"dark_theme",true}});}catch(const std::exception&){rejected=true;}check(rejected,"Unsupported mode was accepted in app options");
         rejected=false;try{decodeOptions(Json{{"mode",0},{"dark_theme","yes"}});}catch(const std::exception&){rejected=true;}check(rejected,"Malformed theme option was accepted");
         auto singlePlan=sample();singlePlan.values[MiddleCity].clear();singlePlan.values[MiddleCompany].clear();m.startSingle(singlePlan);
         check(singlePlan.stage=="to_d1"&&readJson(isolated/"game_job_request.json").at("destination_city")==singlePlan.values[FinalCity],"ETS single planner did not target its sole delivery");

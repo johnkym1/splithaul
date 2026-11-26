@@ -1,6 +1,6 @@
 [Setup]
 AppId=Grumpyman-Installer-Isolated-Tests
-AppName=Dispatch Companion Installer Tests
+AppName=SplitHaul Installer Tests
 AppVersion=1.0
 DefaultDirName={localappdata}\Grumpyman\InstallerTests
 PrivilegesRequired=lowest

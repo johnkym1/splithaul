@@ -25,7 +25,7 @@ foreach($name in @('PluginTests','ModTests')){
     RunSetup (Join-Path $fixture 'unins000.exe') @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
 }
 # The same installer code and payload, with only an isolated uninstall AppId.
-& $compiler /Qp /DInstallerTestBuild (('/O'+$run)) /FBundleTestSetup (Join-Path $PSScriptRoot 'DispatchCompanion.iss') | Out-File (Join-Path $run 'bundle-compile.log')
+& $compiler /Qp /DInstallerTestBuild (('/O'+$run)) /FBundleTestSetup (Join-Path $PSScriptRoot 'SplitHaul.iss') | Out-File (Join-Path $run 'bundle-compile.log')
 if($LASTEXITCODE -ne 0){throw 'Bundle test installer compile failed'}
 $setup=Join-Path $run 'BundleTestSetup.exe'
 $app=Join-Path $run 'app'
@@ -47,13 +47,21 @@ for($i=0;$i -lt 2;$i++){
 $common=@('/CURRENTUSER','/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/NOICONS',('/DIR="'+$app+'"'),('/ATSHOME="'+$ats+'"'),('/ETSHOME="'+$ets+'"'))
 # Validate both selected homes before copying any application or game file.
 RunSetup $setup (@($common | Where-Object {$_ -notlike '/ETSHOME=*'})+@('/TASKS=atsmod,etsmod',('/ETSHOME="'+$run+'\missing"'),('/LOG="'+$run+'\invalid-home.log"'))) $false
-Check (!(Test-Path -LiteralPath (Join-Path $app 'DispatchPlanner.exe'))) 'Invalid home copied the app before preflight finished'
+Check (!(Test-Path -LiteralPath (Join-Path $app 'SplitHaul.exe'))) 'Invalid home copied the app before preflight finished'
 for($i=0;$i -lt 2;$i++){
     $target=Join-Path $homes[$i] ('mod\'+$names[$i])
     Check ((Hash $target) -eq $before[$target]) 'Invalid home changed an existing mod'
 }
+# Simulate the previous product in the same install folder. The fixed AppId
+# lets Setup upgrade in place; the old executable must be backed up and retired.
+New-Item -ItemType Directory -Path $app -Force | Out-Null
+$legacyExe=Join-Path $app 'DispatchPlanner.exe'
+Set-Content -LiteralPath $legacyExe -Value 'previous application fixture'
+$legacyHash=Hash $legacyExe
 RunSetup $setup ($common+@('/TASKS=atsmod,etsmod',('/LOG="'+$run+'\install.log"')))
-Check ((Hash (Join-Path $app 'DispatchPlanner.exe')) -eq (Hash (Join-Path $payload 'DispatchPlanner.exe'))) 'Installed application differs from payload'
+Check (!(Test-Path -LiteralPath $legacyExe)) 'Rename left the old executable active'
+Check ((Hash (Join-Path $app ('app-backups\DispatchPlanner.exe.'+$legacyHash+'.bak'))) -eq $legacyHash) 'Rename did not preserve the old application'
+Check ((Hash (Join-Path $app 'SplitHaul.exe')) -eq (Hash (Join-Path $payload 'SplitHaul.exe'))) 'Installed application differs from payload'
 for($i=0;$i -lt 2;$i++){
     $target=Join-Path $homes[$i] ('mod\'+$names[$i])
     Check ((Hash $target) -eq (Hash (Join-Path $payload ('mods\'+$names[$i])))) 'Installed game mod differs from payload'
@@ -70,7 +78,7 @@ for($i=0;$i -lt 2;$i++){
     }
 }
 RunSetup (Join-Path $app 'unins000.exe') @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/LOG="'+$run+'\uninstall.log"'))
-Check (!(Test-Path -LiteralPath (Join-Path $app 'DispatchPlanner.exe'))) 'Uninstall left the app executable'
+Check (!(Test-Path -LiteralPath (Join-Path $app 'SplitHaul.exe'))) 'Uninstall left the app executable'
 for($i=0;$i -lt 2;$i++){
     $target=Join-Path $homes[$i] ('mod\'+$names[$i])
     Check ((Hash $target) -eq (Hash (Join-Path $payload ('mods\'+$names[$i])))) 'App uninstall removed or changed an installed game mod'

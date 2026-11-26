@@ -99,10 +99,11 @@ int wmain(int argc,wchar_t** argv) {
         nav.claim();nav.finish(false);check(nav.state=="unavailable"&&!nav.ready(true,true,true,true,true,35002),"Failed reset was retried");
         const live::fs::path project=live::fs::absolute(argv[1]),root=live::fs::absolute(argv[2])/live::uniqueId();
         for(const auto& d:{root,root/"claims",root/"duplicates",root/"results"})live::fs::create_directories(d);
-        const dispatchLauncher::Paths launcher={L"C:\\Users\\Grümp\\Dispatch Folder\\DispatchPlanner.exe",L"C:\\Users\\Grümp\\Dispatch Folder"};
+        const dispatchLauncher::Paths launcher={L"C:\\Users\\Grümp\\Dispatch Folder\\SplitHaul.exe",L"C:\\Users\\Grümp\\Dispatch Folder"};
         auto registration=dispatchLauncher::registrationJson(launcher);
         check(dispatchLauncher::parseRegistration(registration).exe==launcher.exe,"Launcher lost spaces or Unicode in the executable path");
-        auto invalidRegistration=registration;invalidRegistration["executable"]="DispatchPlanner.exe";check(rejects([&]{dispatchLauncher::parseRegistration(invalidRegistration);}),"Launcher accepted a relative executable path");
+        auto legacyRegistration=registration;legacyRegistration["executable"]="C:\\Old App\\DispatchPlanner.exe";check(dispatchLauncher::parseRegistration(legacyRegistration).exe.filename()==L"DispatchPlanner.exe","Launcher rejected legacy registration during upgrade");
+        auto invalidRegistration=registration;invalidRegistration["executable"]="SplitHaul.exe";check(rejects([&]{dispatchLauncher::parseRegistration(invalidRegistration);}),"Launcher accepted a relative executable path");
         invalidRegistration=registration;invalidRegistration["project"]="relative";check(rejects([&]{dispatchLauncher::parseRegistration(invalidRegistration);}),"Launcher accepted a relative project path");
         invalidRegistration=registration;invalidRegistration["executable"]="C:\\Other.exe";check(rejects([&]{dispatchLauncher::parseRegistration(invalidRegistration);}),"Launcher accepted the wrong executable name");
         invalidRegistration=registration;invalidRegistration["version"]=99;check(rejects([&]{dispatchLauncher::parseRegistration(invalidRegistration);}),"Unknown launcher registration version was accepted");

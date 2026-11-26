@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0 — SplitHaul by grumpyman, test pre-release, 26 November 2026
+
+- Rename the app, executable, installer, shortcuts and repository to SplitHaul.
+- Retain the installer identity and existing data; back up the previous app.
+- Update Shift+F9 registration and the GitHub update address. Existing users
+  need to download this first renamed installer manually.
+- Include multi-drop cargo splitting, grouped game modes, preferred distance,
+  round trips, route/cargo delivery limits and ATS/ETS2 loaded-DLC filtering.
+- Include ETS2 DLC city definitions and Iceland coordinates.
+- Keep GT trailer mod identifiers compatible with purchased trailers.
+
+Complete multi-drop/round-trip driving remains unverified. Historical release
+assets below retain their original filenames for traceability.
+
 ## 0.2.11 — test pre-release, 25 November 2026
 
 - Bundle the app, ATS/ETS2 telemetry plugins and both trailer mods in one

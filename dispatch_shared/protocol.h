@@ -14,11 +14,14 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
+#include <set>
 
 namespace live {
 using Json=nlohmann::json;
 namespace fs=std::filesystem;
-inline constexpr int protocolVersion=4;
+inline constexpr int protocolVersion=5;
+inline constexpr unsigned maximumStops=8;
 inline uint64_t utcMs() {
     FILETIME t;GetSystemTimeAsFileTime(&t);ULARGE_INTEGER n;n.LowPart=t.dwLowDateTime;n.HighPart=t.dwHighDateTime;
     return (n.QuadPart-116444736000000000ULL)/10000;
@@ -49,11 +52,19 @@ struct Request {
     Route finalRoute;
     std::string secondId;
     unsigned remainingPercent=50;
+    // Multi-drop keeps the original pickup/cargo and all trailers attached.
+    std::vector<Route> dropRoutes;
+    std::vector<std::string> dropIds;
+    bool multiDrop() const {return !dropRoutes.empty();}
 };
 inline Json requestJson(const Request& r) {
     Json j={{"protocol",protocolVersion},{"game",dispatchGame::id},{"request_id",r.id},{"session_id",r.session},{"context_id",r.context},{"trailer_signature",r.trailer},{"created_utc_ms",r.created},{"expires_utc_ms",r.expires},{"route",routeJson(r.route)}};
     j["load_policy"]="maximum_whole_units";
     if(r.twoStop)j["continuation"]={{"request_id",r.secondId},{"route",routeJson(r.finalRoute)},{"remaining_percent",r.remainingPercent}};
+    if(r.multiDrop()) {
+        j.erase("continuation");j["drops"]=Json::array();j["split_policy"]="equal_whole_units";
+        for(size_t i=0;i<r.dropRoutes.size();++i)j["drops"].push_back({{"request_id",r.dropIds.at(i)},{"route",routeJson(r.dropRoutes[i])}});
+    }
     return j;
 }
 inline Request parseRequest(const Json& j) {
@@ -66,6 +77,19 @@ inline Request parseRequest(const Json& j) {
         if(!next.at("remaining_percent").is_number_integer())throw std::runtime_error("Remaining percentage must be a whole number.");
         const auto percent=next.at("remaining_percent").get<int64_t>();if(percent<1||percent>99)throw std::runtime_error("Remaining load must be between 1 and 99 percent.");r.remainingPercent=static_cast<unsigned>(percent);
         if(!requestId(r.secondId)||r.secondId==r.id||!r.finalRoute.valid()||r.finalRoute.source()!=r.route.source()||r.finalRoute.cargo!=r.route.cargo||r.finalRoute.target()==r.route.target())throw std::runtime_error("A two-stop plan needs the same pickup/cargo, distinct request IDs and two different deliveries.");
+    }
+    if(j.contains("drops")) {
+        const auto& drops=j.at("drops");
+        if(j.contains("continuation")||j.value("split_policy",std::string())!="equal_whole_units"||!drops.is_array()||drops.size()<3||drops.size()>maximumStops)throw std::runtime_error("Multi-drop requires 3 to 8 deliveries and an equal whole-unit split.");
+        std::set<std::string> ids,cities;
+        for(const auto& drop:drops) {
+            const auto id=drop.at("request_id").get<std::string>();const auto route=parseRoute(drop.at("route"));
+            const bool finalReturn=route.targetCity==r.route.sourceCity&&r.dropRoutes.size()+1==drops.size();
+            if(!requestId(id)||!ids.insert(id).second||!route.valid()||route.source()!=r.route.source()||route.cargo!=r.route.cargo||(route.targetCity==r.route.sourceCity&&!finalReturn)||!cities.insert(route.targetCity).second)throw std::runtime_error("Multi-drop needs unique delivery cities; only the final delivery may return to the pickup city, at a different depot.");
+            r.dropIds.push_back(id);r.dropRoutes.push_back(route);
+        }
+        if(r.dropIds.front()!=r.id||routeJson(r.dropRoutes.front())!=routeJson(r.route))throw std::runtime_error("The first delivery must match the dispatch request.");
+        r.twoStop=true;r.secondId=r.dropIds.back();r.finalRoute=r.dropRoutes.back();
     }
     return r;
 }

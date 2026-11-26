@@ -29,4 +29,9 @@ inline bool matchingPayload(uint32_t count,double kg,uint32_t expected,double un
     const auto target=double(expected)*unitKg;
     return expected>0&&count==expected&&std::isfinite(kg)&&std::isfinite(unitKg)&&unitKg>0&&std::fabs(kg-target)<=(std::max)(0.5,target*0.0001);
 }
+inline uint32_t multiDropRemaining(uint32_t initial,unsigned stops,unsigned delivered) {
+    if(stops<3||stops>8||initial<stops||initial>1000000||delivered>stops)throw std::runtime_error("There must be at least one whole cargo unit for every delivery.");
+    // Give the first remainder stops one extra unit. Nothing is lost to rounding.
+    return initial-(initial/stops)*delivered-(std::min)(initial%stops,delivered);
+}
 }

@@ -13,7 +13,7 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
         details=CreateWindowW(L"STATIC",L"Starting listener...",WS_CHILD|WS_VISIBLE,20,20,720,380,hwnd,nullptr,GetModuleHandleW(nullptr),nullptr);
         appHotkey::initialize();SetTimer(hwnd,1,100,nullptr);return 0;
     case WM_TIMER:{
-        appHotkey::poll();const auto status=appHotkey::status().dump(2);const std::string value="Shift+F9 should open or focus Dispatch Companion.\r\nThis host does not read or change game memory.\r\n\r\n"+status+"\r\n\r\n"+lastLog;
+        appHotkey::poll();const auto status=appHotkey::status().dump(2);const std::string value="Shift+F9 should open or focus SplitHaul.\r\nThis host does not read or change game memory.\r\n\r\n"+status+"\r\n\r\n"+lastLog;
         const auto count=MultiByteToWideChar(CP_UTF8,0,value.data(),static_cast<int>(value.size()),nullptr,0);std::wstring wide(static_cast<size_t>(count),0);MultiByteToWideChar(CP_UTF8,0,value.data(),static_cast<int>(value.size()),wide.data(),count);SetWindowTextW(details,wide.c_str());return 0;
     }
     case WM_CLOSE:{

@@ -1,7 +1,9 @@
-param([switch]$SkipBuild)
+param([switch]$SkipBuild,[string]$AppBuildDirectory='dispatch_cpp\build')
 $ErrorActionPreference='Stop'
 $projectRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $payload=Join-Path $PSScriptRoot 'build\payload'
+$appBinary=Join-Path (Join-Path $projectRoot $AppBuildDirectory) 'SplitHaul.exe'
+if(!$SkipBuild -and $AppBuildDirectory -ne 'dispatch_cpp\build'){throw 'A custom app output requires -SkipBuild after its checks pass.'}
 $compiler=Join-Path $projectRoot 'tools\inno-setup\ISCC.exe'
 function Get-PayloadRelativePath([string]$path) {
     $prefix=[IO.Path]::GetFullPath($payload).TrimEnd('\')+'\'
@@ -32,11 +34,11 @@ try {
     if($LASTEXITCODE -ne 0){throw 'Catalog packaging tool compilation failed.'}
     $versionText=Get-Content -LiteralPath dispatch_cpp\app_version.h -Raw
     $version=[regex]::Match($versionText,'DISPATCH_VERSION_TEXT "([0-9.]+)"').Groups[1].Value
-    if(!$version -or (Get-Item -LiteralPath dispatch_cpp\build\DispatchPlanner.exe).VersionInfo.FileVersion -ne $version){throw 'The app binary and source versions do not match.'}
+    if(!$version -or (Get-Item -LiteralPath $appBinary).VersionInfo.FileVersion -ne $version){throw 'The app binary and source versions do not match.'}
     New-Item -ItemType Directory -Path $payload -Force | Out-Null
     # Fail closed if an existing staging directory contains anything outside the
     # small, explicit payload. Never recursively copy the development workspace.
-    $allowed=@('DispatchPlanner.exe','installed-layout.json','catalogs\ats.json','catalogs\ets2.json','plugins\ats\GT_Telemetry.dll','plugins\ets2\GT_Telemetry.dll','notices\nlohmann-json-MIT.txt','notices\SCS-SDK-license.txt','mods\GT_Tanker_Combinations_ATS.scs','mods\GT_Tanker_Combinations_ETS2.scs','package-manifest.json')
+    $allowed=@('SplitHaul.exe','installed-layout.json','catalogs\ats.json','catalogs\ets2.json','plugins\ats\GT_Telemetry.dll','plugins\ets2\GT_Telemetry.dll','notices\nlohmann-json-MIT.txt','notices\SCS-SDK-license.txt','mods\GT_Tanker_Combinations_ATS.scs','mods\GT_Tanker_Combinations_ETS2.scs','package-manifest.json')
     foreach($file in Get-ChildItem -LiteralPath $payload -Recurse -File){
         $relative=Get-PayloadRelativePath $file.FullName
         if($relative -notin $allowed){throw ('Unexpected file in release staging: '+$relative)}
@@ -44,7 +46,7 @@ try {
     & (Join-Path $PSScriptRoot 'build\CatalogPack.exe') $projectRoot $payload
     if($LASTEXITCODE -ne 0){throw 'Packaged catalog/storage checks failed.'}
     foreach($dir in @('plugins\ats','plugins\ets2','notices','mods')){New-Item -ItemType Directory -Path (Join-Path $payload $dir) -Force | Out-Null}
-    Copy-Item -LiteralPath dispatch_cpp\build\DispatchPlanner.exe -Destination $payload
+    Copy-Item -LiteralPath $appBinary -Destination $payload
     Copy-Item -LiteralPath native_job_bridge\build\shift-f9-ats\GT_Telemetry.dll -Destination (Join-Path $payload 'plugins\ats')
     Copy-Item -LiteralPath native_job_bridge\build\ets2\GT_Telemetry.dll -Destination (Join-Path $payload 'plugins\ets2')
     Copy-Item -LiteralPath dispatch_cpp\vendor\LICENSE.json.MIT -Destination (Join-Path $payload 'notices\nlohmann-json-MIT.txt')
@@ -67,7 +69,7 @@ try {
     $files=@(Get-ChildItem -LiteralPath $payload -Recurse -File | Where-Object {$_.Name -ne 'package-manifest.json'} | ForEach-Object {
         [ordered]@{path=(Get-PayloadRelativePath $_.FullName).Replace('\','/');sha256=(Get-FileHash -LiteralPath $_.FullName).Hash.ToLowerInvariant();bytes=$_.Length}
     })
-    [ordered]@{product='Dispatch Companion';version=$version;publisher='Grumpyman';edition='development test installer';supported_game_sha256=[ordered]@{ats=$atsHashes;ets2=$etsHashes};trailer_mods=$trailerMods;files=$files;contains_personal_profiles_or_history=$false} | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath (Join-Path $payload 'package-manifest.json') -Encoding utf8
+    [ordered]@{product='SplitHaul by grumpyman';version=$version;publisher='grumpyman';edition='development test installer';supported_game_sha256=[ordered]@{ats=$atsHashes;ets2=$etsHashes};trailer_mods=$trailerMods;files=$files;contains_personal_profiles_or_history=$false} | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath (Join-Path $payload 'package-manifest.json') -Encoding utf8
     # Convert the existing logo to icon format; no new artwork is generated.
     Add-Type -AssemblyName System.Drawing
     $logo=[Drawing.Image]::FromFile((Join-Path $projectRoot 'dispatch_cpp\assets\grumpyman.png'))
@@ -82,12 +84,12 @@ try {
         foreach($unused in 1..4){$ico.Write([byte]0)}
         $ico.Write([uint16]1);$ico.Write([uint16]32);$ico.Write([uint32]$png.Length);$ico.Write([uint32]22);$ico.Write($png.ToArray())
     }finally{$ico.Dispose();$png.Dispose();$graphics.Dispose();$bitmap.Dispose();$logo.Dispose()}
-    & $compiler /Qp (Join-Path $PSScriptRoot 'DispatchCompanion.iss')
+    & $compiler /Qp (Join-Path $PSScriptRoot 'SplitHaul.iss')
     if($LASTEXITCODE -ne 0){throw 'Installer compilation failed.'}
-    $setup=Join-Path $projectRoot ('dist\DispatchCompanion-Setup-'+$version+'-win64.exe')
+    $setup=Join-Path $projectRoot ('dist\SplitHaul-Setup-'+$version+'-win64.exe')
     $setupHash=(Get-FileHash -LiteralPath $setup).Hash.ToLowerInvariant()
     ($setupHash+'  '+[IO.Path]::GetFileName($setup)) | Set-Content -LiteralPath ($setup+'.sha256') -Encoding ascii
-    Copy-Item -LiteralPath (Join-Path $payload 'package-manifest.json') -Destination (Join-Path $projectRoot ('dist\DispatchCompanion-'+$version+'-manifest.json'))
+    Copy-Item -LiteralPath (Join-Path $payload 'package-manifest.json') -Destination (Join-Path $projectRoot ('dist\SplitHaul-'+$version+'-manifest.json'))
     Write-Output ('Installer: '+$setup)
     Write-Output ('SHA-256: '+$setupHash)
 }finally{Pop-Location}

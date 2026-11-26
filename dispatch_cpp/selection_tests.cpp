@@ -12,7 +12,8 @@ struct LivePanelSelectionTest {
         if(!parent)throw std::runtime_error("Cannot create isolated selection test window");
         LivePanel panel(parent,app,project);
         if(!panel.catalog)throw std::runtime_error("Selection test catalog failed");
-        auto& catalog=*panel.catalog;
+        auto& catalog=*panel.catalog;catalog.filterDlcs=false;
+        panel.project=project/"dispatch_cpp/build/multi-drop/selection-preferences"/live::uniqueId();std::filesystem::create_directories(panel.project);panel.preferredKm=0;panel.roundTrip=false;SetWindowTextW(panel.distanceEdit,L"0");
         catalog.positions={{"a",{0,0}},{"b",{10000,0}},{"c",{20000,0}},{"d",{0,20000}},{"e",{0,10000}}};
         catalog.locations.clear();for(const auto& p:catalog.positions)catalog.locations[p.first]={"depot"};
         catalog.outgoing={{"depot",{"wood"}}};catalog.incoming=catalog.outgoing;
@@ -76,6 +77,25 @@ struct LivePanelSelectionTest {
         panel.status["trailer"]["trailer_count"]=2;panel.status["trailer"]["dolly_count"]=1;panel.render();check(IsWindowEnabled(panel.combos[0]),"ETS2 double plus dolly was rejected");
         panel.status["trailer"]["combination_known"]=false;panel.render();check(!IsWindowEnabled(panel.combos[0]),"Unverified combination enabled route selection");
         dispatchGame::select(false);panel.status["trailer"]["combination_known"]=true;panel.status["trailer"]["trailer_count"]=4;panel.render();check(!IsWindowEnabled(panel.combos[0]),"ATS accepted four trailers");
+        panel.status["trailer"]["trailer_count"]=3;panel.setRandom(false);panel.setTwoStop(true);panel.setMultiDrop(true);
+        panel.selected={"a","depot","wood","","","c","depot"};panel.generateDrops();panel.render();
+        check(panel.dropRoutes().size()==3&&panel.dropRoutes().front().targetCity=="b"&&panel.dropRoutes()[1].targetCity=="f"&&panel.dropRoutes().back().targetCity=="c","Multi-drop generator did not retain ordered deliveries");
+        const auto firstDrop=panel.intermediateDrops.front();
+        SendMessageW(panel.stopEditorCombo,CB_SETCURSEL,1,0);panel.command(410,CBN_SELCHANGE);
+        check(panel.editingDrop==1&&panel.selected[3]=="f"&&panel.intermediateDrops.front()==firstDrop,"Editing another delivery changed the first stop");
+        choose(4,"other");check(panel.dropRoutes()[1].targetCompany=="other"&&panel.dropRoutes().front().targetCity=="b","Manual multi-drop did not preserve independent selections");
+        check(std::none_of(panel.options[3].begin(),panel.options[3].end(),[](const ats::Choice& c){return c.id=="e";}),"Manual selection offered an off-route city");
+        check(SendMessageW(panel.stopCountCombo,CB_GETCOUNT,0,0)==1,"Short route offered unavailable delivery counts");
+        SetWindowTextW(panel.distanceEdit,L"1000");panel.command(413,EN_KILLFOCUS);
+        SendMessageW(panel.stopCountCombo,CB_SETCURSEL,1,0);panel.command(409,CBN_SELCHANGE);check(panel.dropCount==4&&panel.intermediateDrops.size()==3&&panel.intermediateDrops[1][0]=="f","Changing stop count lost existing deliveries");
+        catalog.locations["a"].insert("other");SendMessageW(panel.roundTripCheck,BM_SETCHECK,BST_CHECKED,0);panel.command(414,BN_CLICKED);choose(6,"other");panel.generateDrops();panel.render();
+        check(panel.selected[5]=="a"&&!IsWindowEnabled(panel.combos[5])&&ats::tripFits(catalog,panel.dropRoutes(),panel.body,panel.tripChoices),"Round-trip selection failed");
+        check(panel.options[6].size()==1&&panel.options[6][0].id=="other","Return offered original pickup depot");
+        const auto preference=live::readJson(panel.project/"multi_drop_preferences.json");check(preference.at("ats").at("round_trip")==true&&preference.at("ats").at("preferred_km")==1000,"Trip preference not persisted");
+        panel.lastId=live::uniqueId();panel.lastSession="multi-session";panel.status["session_id"]=panel.lastSession;panel.submitted=live::utcMs();panel.render();
+        check(!IsWindowEnabled(panel.stopCountCombo)&&!IsWindowEnabled(panel.stopEditorCombo)&&!IsWindowEnabled(panel.generateButton),"Pending multi-drop allowed itinerary edits");
+        panel.lastId.clear();panel.lastSession.clear();panel.submitted=0;panel.setMultiDrop(false);panel.setTwoStop(false);panel.render();
+        check(IsWindowEnabled(panel.combos[3]),"Single delivery did not recover after multi-drop");
         DestroyWindow(parent);
         std::cout<<"PASS: "<<count<<" isolated selection checks: either city first, compatible automatic replacement and independent companies.\n";
     }

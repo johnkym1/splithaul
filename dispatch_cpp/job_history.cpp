@@ -94,7 +94,7 @@ void writeCsv(const live::fs::path& path,const std::string& data) {
     try{live::physicalPath(f,temp);DWORD written=0;if(!WriteFile(f,data.data(),static_cast<DWORD>(data.size()),&written,nullptr)||written!=data.size()||!FlushFileBuffers(f))throw std::runtime_error("Cannot finish job history.");CloseHandle(f);f=INVALID_HANDLE_VALUE;if(!MoveFileExW(temp.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)){const auto error=GetLastError();throw std::runtime_error("Cannot update "+path.filename().u8string()+" (Windows error "+std::to_string(error)+"). Close the CSV in other programs and check any protection alert.");}}
     catch(...){if(f!=INVALID_HANDLE_VALUE)CloseHandle(f);DeleteFileW(temp.c_str());throw;}
 }
-struct Leg {std::string plan,session;unsigned stop=0;};
+struct Leg {std::string plan,session;unsigned stop=0,count=2;};
 struct Row {uint64_t stamp=0;std::string id,session,line;};
 struct Candidate {bool archived=false;live::Json receipt,confirmation=live::Json::object();};
 }
@@ -111,7 +111,7 @@ void retainUserConfirmedDelivery(const live::fs::path& project,const live::fs::p
     const auto receipt=live::readJson(bridge/"results"/(id+".json"));
     if(receipt.at("request_id")!=id||receipt.at("session_id")!=session||receipt.at("route")!=saved.at(multiple?"final_route":"route"))throw std::runtime_error("The confirmed delivery does not match its saved game receipt.");
     const auto phase=receipt.at("state").get<std::string>();if(phase!="loaded"&&phase!="assigned"&&phase!="ended_unconfirmed"&&phase!="delivered")throw std::runtime_error("This game receipt cannot be archived as a confirmed delivery.");
-    live::fs::create_directories(directory);live::writeJson(path,live::Json{{"receipt",receipt},{"confirmation",confirmation},{"plan_id",multiple?first:std::string()},{"stop",multiple?2:0}},false);
+    live::fs::create_directories(directory);live::writeJson(path,live::Json{{"receipt",receipt},{"confirmation",confirmation},{"plan_id",multiple?first:std::string()},{"stop",saved.value("multi_drop",false)?saved.at("drops").size():multiple?2:0}},false);
 }
 HistoryExport exportJobHistory(const live::fs::path& project,const live::fs::path& bridge,const Catalog* catalog,bool profileScoped) {
     if(live::fs::exists(project/dispatchGame::savedDispatch))retainUserConfirmedDelivery(project,bridge,live::readJson(project/dispatchGame::savedDispatch));
@@ -121,6 +121,10 @@ HistoryExport exportJobHistory(const live::fs::path& project,const live::fs::pat
         const auto p=live::readJson(file.path());const auto id=p.at("plan_id").get<std::string>(),session=p.at("session_id").get<std::string>(),first=p.at("first_request_id").get<std::string>(),second=p.at("second_request_id").get<std::string>();
         if(!live::requestId(id)||!live::requestId(session)||!live::requestId(first)||!live::requestId(second)||id!=first||first==second)continue;
         legs[first]={id,session,1};legs[second]={id,session,2};
+        if(p.value("multi_drop",false)) {
+            const auto& drops=p.at("drops");if(!drops.is_array()||drops.size()<3||drops.size()>live::maximumStops)throw std::runtime_error("Invalid multi-drop history plan.");
+            for(size_t i=0;i<drops.size();++i){const auto leg=drops[i].at("request_id").get<std::string>();if(!live::requestId(leg))throw std::runtime_error("Invalid delivery identifier.");legs[leg]={id,session,static_cast<unsigned>(i+1),static_cast<unsigned>(drops.size())};}
+        }
     }catch(const std::exception&){}
     const auto archivePath=project/"job_history.json";live::Json previous={{"version",1},{"jobs",live::Json::array()}};
     std::vector<Candidate> candidates;
@@ -128,7 +132,7 @@ HistoryExport exportJobHistory(const live::fs::path& project,const live::fs::pat
         previous=live::readJson(archivePath,64*1024*1024);if(previous.at("version")!=1||!previous.at("jobs").is_array())throw std::runtime_error("Saved job history is invalid; it has not been overwritten.");
         for(const auto& saved:previous.at("jobs")){
             const auto& r=saved.at("receipt");const auto id=r.at("request_id").get<std::string>(),session=r.at("session_id").get<std::string>(),plan=saved.value("plan_id",std::string());const auto stop=saved.value("stop",0u);
-            if(!plan.empty()&&live::requestId(plan)&&(stop==1||stop==2))legs.emplace(id,Leg{plan,session,stop});
+            if(!plan.empty()&&live::requestId(plan)&&stop>=1&&stop<=live::maximumStops)legs.emplace(id,Leg{plan,session,stop,saved.value("stop_count",2u)});
             candidates.push_back({true,r,saved.value("confirmation",live::Json::object())});
         }
     }
@@ -142,7 +146,7 @@ HistoryExport exportJobHistory(const live::fs::path& project,const live::fs::pat
         if(!file.is_regular_file()||file.path().extension()!=L".json")continue;
         const auto saved=live::readJson(file.path());const auto& receipt=saved.at("receipt");const auto id=receipt.at("request_id").get<std::string>(),session=receipt.at("session_id").get<std::string>(),plan=saved.value("plan_id",std::string());const auto stop=saved.value("stop",0u);
         if(file.path().stem()!=live::fs::path(session+"-"+id))throw std::runtime_error("Driver-confirmed delivery filename does not match its identity.");
-        if(!plan.empty()&&live::requestId(plan)&&stop==2)legs[id]={plan,session,stop};
+        if(!plan.empty()&&live::requestId(plan)&&stop>=2&&stop<=live::maximumStops)legs[id]={plan,session,stop,stop};
         candidates.push_back({true,receipt,saved.at("confirmation")});
     }
     std::map<std::pair<std::string,std::string>,Row> rows;
@@ -167,7 +171,7 @@ HistoryExport exportJobHistory(const live::fs::path& project,const live::fs::pat
             const bool oldManual=records.at(key).contains("confirmation");if(driverConfirmed&&!oldManual)continue;
             if(driverConfirmed==oldManual&&old->second.stamp>stamp)continue;
         }
-        rows[key]={stamp,id,session,line};records[key]={{"receipt",r},{"plan_id",plan},{"stop",stop.empty()?0u:static_cast<unsigned>(std::stoul(stop))}};if(driverConfirmed)records[key]["confirmation"]=candidate.confirmation;
+        rows[key]={stamp,id,session,line};records[key]={{"receipt",r},{"plan_id",plan},{"stop",stop.empty()?0u:static_cast<unsigned>(std::stoul(stop))}};if(!stop.empty())records[key]["stop_count"]=leg->second.count;if(driverConfirmed)records[key]["confirmation"]=candidate.confirmation;
     }catch(const std::exception&){if(candidate.archived)throw std::runtime_error("A saved job history entry is invalid; the archive has not been overwritten.");}
     std::vector<Row> ordered;for(auto& item:rows)ordered.push_back(std::move(item.second));
     std::sort(ordered.begin(),ordered.end(),[](const Row& a,const Row& b){return std::tie(a.stamp,a.session,a.id)<std::tie(b.stamp,b.session,b.id);});
@@ -195,7 +199,7 @@ std::vector<HistoryEntry> readHistoryEntries(const live::fs::path& project,const
         const auto job=receipt.value("job",live::Json::object());
         if(job.is_object()&&job.value("payload_known",false)&&job.value("cargo_mass_kg",0.0)>0&&job.value("cargo_units",0u)>0){entry.massKg=optionalNumber(job,"cargo_mass_kg");entry.units=job.at("cargo_units").get<uint32_t>();}
         if(!entry.driverConfirmed){const auto details=receipt.value("details",live::Json::object());entry.revenue=optionalNumber(details,"revenue");entry.distanceKm=optionalNumber(details,"distance.km");entry.damage=optionalNumber(details,"cargo.damage");}
-        entry.plan=saved.value("plan_id",std::string());entry.stop=saved.value("stop",0u);entries.push_back(std::move(entry));
+        entry.plan=saved.value("plan_id",std::string());entry.stop=saved.value("stop",0u);entry.stopCount=saved.value("stop_count",entry.stop?2u:0u);entries.push_back(std::move(entry));
     }
     std::sort(entries.begin(),entries.end(),[](const HistoryEntry& a,const HistoryEntry& b){return std::tie(a.completedMs,a.session,a.id)>std::tie(b.completedMs,b.session,b.id);});return entries;
 }

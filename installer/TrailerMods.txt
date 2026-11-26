@@ -1,6 +1,6 @@
 GT MULTI-TRAILER COMBINATIONS - Made by Grumpyman
 
-Included with Dispatch Companion 0.2.11:
+Included with SplitHaul 0.3.0:
   ATS mod 1.1.3 - GT Multi-Trailer Combinations - ATS
   ETS2 mod 1.1.1 - GT Multi-Trailer Combinations - ETS2
 These packages target game version 1.62. DLC-specific trailers require their
@@ -16,7 +16,7 @@ INSTALL AND ENABLE
    Enable GT Multi-Trailer Combinations - ATS or - ETS2, then confirm changes.
    If the same mod is already active, leave it enabled. Do not add another copy.
 4. Use the trailer dealer and Customize menus to buy the combination, attach
-   it in-game, then use Dispatch Companion with that owned combination.
+   it in-game, then use SplitHaul with that owned combination.
 
 The Mod Manager names and filenames stay the same across updates:
   GT_Tanker_Combinations_ATS.scs
@@ -50,10 +50,10 @@ when its contents differ. Backups are outside the active mod folder:
 To roll back, close the game and copy the desired backup to the mod folder
 using its original .scs filename (remove the .<hash>.bak suffix).
 
-Uninstalling Dispatch Companion leaves the installed game mods and their
+Uninstalling SplitHaul leaves the installed game mods and their
 backups in place: purchased trailers in your saves may still depend on them.
 Remove or sell dependent trailers before disabling/removing a mod yourself.
 Copies of both current mod archives are also available in the installed app's
 mods folder, even if you did not select automatic mod installation.
 
-Dispatch Companion is independent of SCS Software and is not endorsed by SCS.
+SplitHaul is independent of SCS Software and is not endorsed by SCS.

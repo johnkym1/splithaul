@@ -15,8 +15,8 @@
 #pragma comment(lib,"winhttp.lib")
 
 namespace updates {
-inline constexpr char releasesUrl[]="https://github.com/johnkym1/dispatch-companion/releases";
-inline constexpr char releasePrefix[]="https://github.com/johnkym1/dispatch-companion/releases/tag/";
+inline constexpr char releasesUrl[]="https://github.com/johnkym1/splithaul/releases";
+inline constexpr char releasePrefix[]="https://github.com/johnkym1/splithaul/releases/tag/";
 inline constexpr bool includePrereleases=true; // The app is currently a test release.
 using Version=std::array<unsigned,3>;
 inline std::optional<Version> version(std::string text){
@@ -38,7 +38,7 @@ inline Result evaluate(const dispatch::Json& releases,const std::string& install
         const bool test=release.value("prerelease",false);if(test&&!includeTests)continue;
         const auto tag=release.at("tag_name").get<std::string>();const auto parsed=version(tag);if(!parsed||tag!="v"+std::to_string((*parsed)[0])+"."+std::to_string((*parsed)[1])+"."+std::to_string((*parsed)[2]))continue;
         const auto number=tag.substr(1),url=release.at("html_url").get<std::string>();if(url!=std::string(releasePrefix)+tag)continue;
-        const auto installer="DispatchCompanion-Setup-"+number+"-win64.exe";bool exe=false,checksum=false;
+        const auto installer="SplitHaul-Setup-"+number+"-win64.exe";bool exe=false,checksum=false;
         if(!release.at("assets").is_array())continue;
         for(const auto& asset:release["assets"])if(asset.value("state",std::string())=="uploaded"&&asset.value("size",uint64_t(0))>0){const auto name=asset.value("name",std::string());exe|=name==installer;checksum|=name==installer+".sha256";}
         if(!exe||!checksum||(highest&&*parsed<=*highest))continue;
@@ -58,10 +58,10 @@ inline void requireSuccess(DWORD status){
     if(status!=200)throw std::runtime_error("GitHub update check failed (HTTP "+std::to_string(status)+"). Please try again later.");
 }
 inline Result check(){
-    Internet session(WinHttpOpen(L"DispatchCompanion/" DISPATCH_VERSION_WIDE,WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));
+    Internet session(WinHttpOpen(L"SplitHaul/" DISPATCH_VERSION_WIDE,WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));
     WinHttpSetTimeouts(session.value,5000,5000,5000,10000);
     Internet connection(WinHttpConnect(session.value,L"api.github.com",INTERNET_DEFAULT_HTTPS_PORT,0));
-    Internet request(WinHttpOpenRequest(connection.value,L"GET",L"/repos/johnkym1/dispatch-companion/releases?per_page=100",nullptr,WINHTTP_NO_REFERER,WINHTTP_DEFAULT_ACCEPT_TYPES,WINHTTP_FLAG_SECURE|WINHTTP_FLAG_REFRESH));
+    Internet request(WinHttpOpenRequest(connection.value,L"GET",L"/repos/johnkym1/splithaul/releases?per_page=100",nullptr,WINHTTP_NO_REFERER,WINHTTP_DEFAULT_ACCEPT_TYPES,WINHTTP_FLAG_SECURE|WINHTTP_FLAG_REFRESH));
     DWORD policy=WINHTTP_OPTION_REDIRECT_POLICY_NEVER;WinHttpSetOption(request.value,WINHTTP_OPTION_REDIRECT_POLICY,&policy,sizeof(policy));
     DWORD disabled=WINHTTP_DISABLE_COOKIES;WinHttpSetOption(request.value,WINHTTP_OPTION_DISABLE_FEATURE,&disabled,sizeof(disabled));
     const wchar_t* headers=L"Accept: application/vnd.github+json\r\nX-GitHub-Api-Version: 2026-03-10\r\n";

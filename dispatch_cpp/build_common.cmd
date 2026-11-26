@@ -4,6 +4,7 @@ rem All app targets use the current multi-game configuration and isolated output
 set "buildOutput="
 set "targetDefine=/DGT_MULTI_GAME_APP"
 if "%~1"=="multi" set "buildOutput=build"
+if "%~1"=="multi-drop" set "buildOutput=build\multi-drop"
 if "%~1"=="ets2-app" set "buildOutput=build\ets2-app"
 if "%~1"=="regression" set "buildOutput=build\ets2-regression"
 if not defined buildOutput (
@@ -23,7 +24,7 @@ cl %compilerFlags% /c ats_catalog.cpp job_history.cpp live_panel.cpp history_pag
 if errorlevel 1 exit /b 1
 rc /nologo /fo %buildOutput%\resources.res resources.rc
 if errorlevel 1 exit /b 1
-cl %compilerFlags% main.cpp %buildOutput%\dispatch_core.obj %buildOutput%\ats_catalog.obj %buildOutput%\job_history.obj %buildOutput%\live_panel.obj %buildOutput%\history_page.obj %buildOutput%\resources.res /Fo:%buildOutput%\main.obj /Fe:%buildOutput%\DispatchPlanner.exe /link user32.lib gdi32.lib comctl32.lib shell32.lib bcrypt.lib gdiplus.lib ole32.lib dwmapi.lib uxtheme.lib uuid.lib /SUBSYSTEM:WINDOWS /MANIFEST:EMBED /MANIFESTINPUT:dispatch.manifest /INCREMENTAL:NO
+cl %compilerFlags% main.cpp %buildOutput%\dispatch_core.obj %buildOutput%\ats_catalog.obj %buildOutput%\job_history.obj %buildOutput%\live_panel.obj %buildOutput%\history_page.obj %buildOutput%\resources.res /Fo:%buildOutput%\main.obj /Fe:%buildOutput%\SplitHaul.exe /link user32.lib gdi32.lib comctl32.lib shell32.lib bcrypt.lib gdiplus.lib ole32.lib dwmapi.lib uxtheme.lib uuid.lib /SUBSYSTEM:WINDOWS /MANIFEST:EMBED /MANIFESTINPUT:dispatch.manifest /INCREMENTAL:NO
 if errorlevel 1 exit /b 1
 cl %compilerFlags% tests.cpp %buildOutput%\dispatch_core.obj /Fo:%buildOutput%\tests.obj /Fe:%buildOutput%\dispatch_tests.exe /link /INCREMENTAL:NO
 if errorlevel 1 exit /b 1
@@ -36,6 +37,10 @@ if errorlevel 1 exit /b 1
 cl %compilerFlags% selection_tests.cpp %buildOutput%\dispatch_core.obj %buildOutput%\ats_catalog.obj %buildOutput%\job_history.obj %buildOutput%\live_panel.obj /Fo:%buildOutput%\selection_tests.obj /Fe:%buildOutput%\selection_tests.exe /link user32.lib gdi32.lib comctl32.lib shell32.lib bcrypt.lib ole32.lib /INCREMENTAL:NO
 if errorlevel 1 exit /b 1
 %buildOutput%\selection_tests.exe "%~dp0.."
+if errorlevel 1 exit /b 1
+cl %compilerFlags% multi_drop_tests.cpp %buildOutput%\dispatch_core.obj %buildOutput%\ats_catalog.obj %buildOutput%\job_history.obj /Fo:%buildOutput%\multi_drop_tests.obj /Fe:%buildOutput%\multi_drop_tests.exe /link bcrypt.lib /INCREMENTAL:NO
+if errorlevel 1 exit /b 1
+%buildOutput%\multi_drop_tests.exe "%~dp0.." "%~dp0%buildOutput%\multi-drop-test-data"
 if errorlevel 1 exit /b 1
 cl %compilerFlags% profile_manager_tests.cpp /Fo:%buildOutput%\profile_manager_tests.obj /Fe:%buildOutput%\profile_manager_tests.exe /link user32.lib comctl32.lib bcrypt.lib shell32.lib ole32.lib /INCREMENTAL:NO
 if errorlevel 1 exit /b 1
