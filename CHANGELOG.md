@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1 - Mod Manager presentation, test pre-release, 26 November 2026
+
+- Add the approved SplitHaul tri-axle tanker artwork to both Mod Manager entries.
+- Add the plain-text GitHub website near the top of both mod descriptions.
+- Bundle ATS mod 1.1.5 and ETS2 mod 1.1.3, retaining existing mod filenames,
+  display names, trailer resources and owned-combination compatibility.
+- No dispatch behavior changes from 0.3.0.
+
 ## 0.3.0 — SplitHaul by grumpyman, test pre-release, 26 November 2026
 
 - Rename the app, executable, installer, shortcuts and repository to SplitHaul.

@@ -5,13 +5,16 @@ A Windows dispatch app for single-player **American Truck Simulator** and
 trailer combination, split the original cargo across deliveries, and keep an
 exportable job history.
 
-**[Download SplitHaul 0.3.0 for Windows](https://github.com/johnkym1/splithaul/releases/download/v0.3.0/SplitHaul-Setup-0.3.0-win64.exe)**
+**[Download SplitHaul 0.3.1 for Windows](https://github.com/johnkym1/splithaul/releases/download/v0.3.1/SplitHaul-Setup-0.3.1-win64.exe)**
 
-[Release notes and SHA-256 checksum](https://github.com/johnkym1/splithaul/releases/tag/v0.3.0)
+[Release notes and SHA-256 checksum](https://github.com/johnkym1/splithaul/releases/tag/v0.3.1)
 
 This is an unsigned test pre-release. Setup bundles the app, both game plugins,
-ATS trailer mod 1.1.3 and ETS2 trailer mod 1.1.1. The green **Code** button
+ATS trailer mod 1.1.5 and ETS2 trailer mod 1.1.3. The green **Code** button
 downloads source code; use the installer link to install the app.
+
+Both trailer mods include SplitHaul tanker artwork and the project website in
+their Mod Manager descriptions. Trailer configurations are unchanged.
 
 ## Upgrading from Dispatch Companion
 

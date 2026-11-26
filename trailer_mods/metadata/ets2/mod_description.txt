@@ -1,0 +1,13 @@
+GT Multi-Trailer Combinations - ETS2
+
+SplitHaul by grumpyman - website, downloads and updates:
+https://github.com/johnkym1/splithaul
+
+Use the normal trailer selection and Customize menus for combinations already provided by the game.
+This package adds only 4 dealer entries for combinations unavailable through the normal options.
+Extra doubles: fuel tanker, gas tanker and food tanker in chrome/paint.
+
+All existing GT trailer definitions, chassis and models remain for previously purchased combinations.
+Dollies are excluded from the cargo-trailer limit.
+New combinations require in-game testing.
+SCS Software assets; local additions by Grumpyman / Codex.

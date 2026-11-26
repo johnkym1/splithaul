@@ -1,0 +1,13 @@
+SiiNunit
+{
+mod_package : .package_name
+{
+ package_version: "1.1.5"
+ display_name: "GT Multi-Trailer Combinations - ATS"
+ author: "Grumpyman / Codex; SCS Software assets"
+ category[]: "trailer"
+ icon: "splithaul_icon.jpg"
+ description_file: "mod_description.txt"
+ compatible_versions[]: "1.62.*"
+}
+}

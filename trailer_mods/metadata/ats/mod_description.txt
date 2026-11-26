@@ -1,0 +1,17 @@
+GT Multi-Trailer Combinations - ATS
+
+SplitHaul by grumpyman - website, downloads and updates:
+https://github.com/johnkym1/splithaul
+
+Use the normal trailer selection and Customize menus for combinations already provided by the game.
+This package adds only 6 dealer entries for combinations unavailable through the normal options.
+Extra triples: gas tanker, bottom dumper, end dumper, dry bulk, container and Lode King Prestige hopper.
+
+All existing GT trailer definitions, chassis and models remain for previously purchased combinations.
+Dollies are excluded from the cargo-trailer limit.
+New combinations require in-game testing.
+SCS Software assets; local additions by Grumpyman / Codex.
+
+GT Long Triple: use normal trailer Customize > Triple > chassis/configuration to choose three 45 ft box/flatbed trailers, three 43 ft fuel/food tankers, or three 40 ft container trailers. Two converter dollies do not count as cargo trailers. No extra dealer cards are added for these choices. Menu selection still requires in-game testing.
+
+GT Road Train (3 axles each): choose three 45 ft curtainsiders, three 48 ft fuel tankers, or three 53 ft refrigerated trailers in Customize > Triple. Each cargo trailer has three physical axles; the two converter dollies each have two axles. Installed ATS assets provide no three-axle dolly. No dealer cards added. Custom coupling models require an in-game visual and driving test.

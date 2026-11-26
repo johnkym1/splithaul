@@ -1,8 +1,10 @@
 GT MULTI-TRAILER COMBINATIONS - Made by Grumpyman
 
-Included with SplitHaul 0.3.0:
-  ATS mod 1.1.3 - GT Multi-Trailer Combinations - ATS
-  ETS2 mod 1.1.1 - GT Multi-Trailer Combinations - ETS2
+Included with SplitHaul 0.3.1:
+  ATS mod 1.1.5 - GT Multi-Trailer Combinations - ATS
+  ETS2 mod 1.1.3 - GT Multi-Trailer Combinations - ETS2
+Both mods include the SplitHaul tanker artwork and a plain-text website address:
+https://github.com/johnkym1/splithaul
 These packages target game version 1.62. DLC-specific trailers require their
 matching DLC (for example, the Lode King Prestige hopper).
 
