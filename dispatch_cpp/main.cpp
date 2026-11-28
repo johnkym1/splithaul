@@ -201,7 +201,7 @@ static void paintPageBoxes(HDC dc,int width,int height) {
     auto box=[&](int x,int y,int w,int h){RoundRect(dc,scale(x),scale(y),scale(x+w),scale(y+h),scale(12),scale(12));};
     box(width-260,8,236,58);
     if(optionsPage){
-        box(24,96,width-48,124);box(24,236,width-48,124);box(24,376,width-48,440);
+        box(24,96,width-48,124);box(24,236,width-48,136);box(24,376,width-48,440);
         const int divider=(std::max)(330,width/2)-20;
         MoveToEx(dc,scale(divider),scale(116),nullptr);LineTo(dc,scale(divider),scale(200));
         MoveToEx(dc,scale(divider),scale(256),nullptr);LineTo(dc,scale(divider),scale(340));
@@ -302,7 +302,7 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case WM_COMMAND: {
             const int id=LOWORD(wp);
             if(profileControls&&profileControls->command(id,HIWORD(wp)))return 0;
-            if(id==306&&HIWORD(wp)==BN_CLICKED){if(updateControls)updateControls->start();return 0;}
+            if(id==306&&HIWORD(wp)==BN_CLICKED){if(updateControls&&updateControls->start(livePanel&&livePanel->shouldWarnOnClose()))DestroyWindow(hwnd);return 0;}
             if(id==301&&HIWORD(wp)==BN_CLICKED){optionsPage=!optionsPage;historyVisible=false;mode();layout();return 0;}
             if(id==303&&HIWORD(wp)==BN_CLICKED){historyVisible=!historyVisible;optionsPage=false;mode();layout();return 0;}
             if(id==305&&HIWORD(wp)==BN_CLICKED){
@@ -348,7 +348,7 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             return 0;
         }
         case WM_SIZE:layout();return 0;
-        case WM_TIMER:if(livePanel){const auto running=detectRunningGames();if(running!=lastRunningGames){lastRunningGames=running;selectRunningGame(running);}livePanel->tick();if(livePanel->connectedGameExited()){DestroyWindow(hwnd);return 0;}if(historyPage)historyPage->setProfile(livePanel->activeProfileData());}if(historyPage)historyPage->tick();if(optionsPage&&profileControls)profileControls->refresh();if(updateControls)updateControls->poll();return 0;
+        case WM_TIMER:if(livePanel){const auto running=detectRunningGames();if(running!=lastRunningGames){lastRunningGames=running;selectRunningGame(running);}livePanel->tick();if(livePanel->connectedGameExited()&&!(updateControls&&updateControls->keepingOpen())){DestroyWindow(hwnd);return 0;}if(historyPage)historyPage->setProfile(livePanel->activeProfileData());}if(historyPage)historyPage->tick();if(optionsPage&&profileControls)profileControls->refresh();if(updateControls)updateControls->poll();return 0;
         case WM_NOTIFY:{LRESULT result=0;if(historyPage&&historyPage->notify(reinterpret_cast<const NMHDR*>(lp),result))return result;break;}
         case HistoryPage::OpenMessage:historyVisible=true;optionsPage=false;mode();layout();return 0;
         case LivePanel::RestartReviewMessage:if(livePanel)livePanel->reviewRestart();return 0;
@@ -376,7 +376,7 @@ static LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             AdjustWindowRectExForDpi(&r,WS_OVERLAPPEDWINDOW,FALSE,0,dpi);info->ptMinTrackSize={r.right-r.left,r.bottom-r.top};return 0;
         }
         case WM_DPICHANGED: {const auto r=reinterpret_cast<RECT*>(lp);SetWindowPos(hwnd,nullptr,r->left,r->top,r->right-r->left,r->bottom-r->top,SWP_NOZORDER|SWP_NOACTIVATE);fonts();layout();return 0;}
-        case WM_CTLCOLORSTATIC:{const auto control=reinterpret_cast<HWND>(lp);const int id=GetDlgCtrlID(control);return theme.color(reinterpret_cast<HDC>(wp),id==617||id==618,id==619||!IsWindowEnabled(control));}
+        case WM_CTLCOLORSTATIC:{const auto control=reinterpret_cast<HWND>(lp);const int id=GetDlgCtrlID(control);const auto dc=reinterpret_cast<HDC>(wp);const auto brush=theme.color(dc,id==617||id==618,id==619||!IsWindowEnabled(control));if(id==LivePanel::RoadTrainWarningId)SetTextColor(dc,appOptions.dark?RGB(255,100,100):RGB(190,0,0));return brush;}
         case WM_CTLCOLORBTN:return theme.color(reinterpret_cast<HDC>(wp),false,!IsWindowEnabled(reinterpret_cast<HWND>(lp)));
         case WM_CTLCOLOREDIT:case WM_CTLCOLORLISTBOX:return theme.color(reinterpret_cast<HDC>(wp),true);
         case WM_ERASEBKGND:{RECT area;GetClientRect(hwnd,&area);const auto dc=reinterpret_cast<HDC>(wp);FillRect(dc,&area,theme.backgroundHandle());const auto dpi=static_cast<int>(GetDpiForWindow(hwnd));paintPageBoxes(dc,MulDiv(area.right,96,dpi),MulDiv(area.bottom,96,dpi));return TRUE;}

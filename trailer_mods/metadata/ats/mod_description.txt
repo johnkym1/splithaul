@@ -15,3 +15,7 @@ SCS Software assets; local additions by Grumpyman / Codex.
 GT Long Triple: use normal trailer Customize > Triple > chassis/configuration to choose three 45 ft box/flatbed trailers, three 43 ft fuel/food tankers, or three 40 ft container trailers. Two converter dollies do not count as cargo trailers. No extra dealer cards are added for these choices. Menu selection still requires in-game testing.
 
 GT Road Train (3 axles each): choose three 45 ft curtainsiders, three 48 ft fuel tankers, or three 53 ft refrigerated trailers in Customize > Triple. Each cargo trailer has three physical axles; the two converter dollies each have two axles. Installed ATS assets provide no three-axle dolly. No dealer cards added. Custom coupling models require an in-game visual and driving test.
+
+Australian combinations: Customize > Chain type. Named A-double, B-triple, AB-triple, A-triple and quad choices where compatible chassis exist. Up to four cargo trailers; converter dollies excluded. Requires SplitHaul and game plugins with four-trailer support. Uses SCS trailer models; not exact Australian manufacturer replicas. New combinations require in-game purchase and driving tests.
+
+1.2.1: Native-size, shaded chain diagrams with visible dollies and B-link platforms. ETS2 tanker lead accessory compatibility and food-tanker end-cap defaults corrected after a configurator crash.

@@ -1,8 +1,8 @@
 GT MULTI-TRAILER COMBINATIONS - Made by Grumpyman
 
-Included with SplitHaul 0.3.4:
+Included with SplitHaul 0.3.6:
   ATS mod 1.1.5 - GT Multi-Trailer Combinations - ATS
-  ETS2 mod 1.1.6 - GT Multi-Trailer Combinations - ETS2
+  ETS2 mod 1.1.7 - GT Multi-Trailer Combinations - ETS2
 Both mods include the SplitHaul tanker artwork and a plain-text website address:
 https://github.com/johnkym1/splithaul
 These packages target game version 1.62. DLC-specific trailers require their
@@ -31,14 +31,14 @@ Use the normal trailer family's Customize options for existing doubles and
 triples. Extra dealer cards are limited to six ATS combinations and four ETS2
 tanker doubles, avoiding duplicate entries for every length and axle choice.
 
-ATS: up to three cargo trailers, with converter dollies excluded.
+ATS: up to four cargo trailers, with converter dollies excluded.
   GT Long Triple: box (dry van/insulated/reefer), flatbed/curtainsider, fuel,
   food and container families, through the normal Triple configuration menu.
   GT Road Train: three-axle curtainsiders (3 x 45 ft), fuel tanks (3 x 48 ft)
   and reefers (3 x 53 ft). Choose Triple, then the GT Road Train configuration.
   These road trains have two TWO-AXLE dollies. No three-axle dolly is included.
   The game calls these Triple, rather than HCT. Stock pup triples also remain.
-ETS2: up to two cargo trailers, with converter dollies excluded.
+ETS2: up to four cargo trailers, with converter dollies excluded.
   Additional dealer doubles: fuel, gas, chrome food tanker and painted food
   tanker. HCT freezer choices also include Schmitz S.KO COOL, Tirsan SRI,
   Schwarzmuller Reefer, Kogel COOL and Krone Cool Liner, through normal
@@ -46,8 +46,26 @@ ETS2: up to two cargo trailers, with converter dollies excluded.
   Version 1.1.6 corrects cable/hitch accessory compatibility for the latter
   four brands. Their visible hitch alignment still needs in-game retesting.
 
-These are test builds. The newest ATS road-train menu choices and driving still
-need in-game verification. Try new combinations on a test profile first.
+ETS2 1.1.7 removes garage-country restrictions from 167 standard and supported
+DLC Double, B-Double and HCT definitions. Single-trailer restrictions and DLC
+ownership requirements are unchanged. If another trailer mod overrides those
+definitions, place this GT mod above it in Mod Manager.
+
+AUSTRALIAN COMBINATIONS (MOD VERSION 1.2.1)
+Use Customize > Chain type for A-double, B-triple, AB-triple, A-triple,
+A-quad, BAB-Quad and ABB-Quad where the trailer family supports that layout.
+Normal B-double choices remain. No extra dealer cards were added.
+Freezer, curtainside, tipper, livestock, logging and flatbed combinations are
+included, with compatible tanker, hopper and container options. These use
+available SCS models, not exact Australian manufacturer replicas.
+Matching trailer DLC is required for branded choices. Existing dolly axle
+arrangements remain; this update does not add a three-axle dolly.
+Use SplitHaul 0.3.9 and its matching plugins for four-trailer dispatch.
+ETS2 shows the red advisory "over B-Double not recommended" for HCT/A-double,
+triple and quad combinations. This warning does not prevent dispatch.
+
+These are test builds. New combinations still need in-game preview, purchase
+and driving verification. Try new combinations on a test profile first.
 
 UPDATING, BACKUPS AND REMOVAL
 Setup replaces the matching .scs file in place, after making a verified backup
@@ -63,3 +81,6 @@ Copies of both current mod archives are also available in the installed app's
 mods folder, even if you did not select automatic mod installation.
 
 SplitHaul is independent of SCS Software and is not endorsed by SCS.
+
+1.2.1 corrects cropped chain icons and ETS2 tanker accessory compatibility.
+Food-tanker configurations now provide matching front/rear tank-end defaults.

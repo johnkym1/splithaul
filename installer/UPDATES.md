@@ -43,23 +43,36 @@ status caption together.
 
 ## What a driver sees
 
-The driver opens Options and presses Check for updates. The app compares its
-installed version with the highest eligible published version. If a newer
-version exists, it offers to open that exact GitHub release page. The driver
-downloads Setup, closes Dispatch and both games, and runs the installer.
-Existing app profiles, settings and history are preserved by the installer.
-Game plugin installation remains optional and uses Setup's usual game-version
-checks and backups.
+The driver opens Options and presses Check for updates. A newer eligible release
+changes the button to Download update. Downloads run in the background with
+progress, cancellation and retry. The app verifies the exact release asset URL,
+size, GitHub SHA-256 digest and matching checksum sidecar before offering Install
+update. HTTPS redirects are restricted to GitHub's release asset service.
 
-There is no automatic installation and no GitHub sign-in is required to check
-public releases. A network failure or GitHub rate limit produces an error and
-can be retried; it does not claim the installed version is current.
+The driver closes both games and presses Install update. Confirmation starts
+normal Setup (including Windows elevation) and closes SplitHaul only after the
+launch succeeds. Cancelled elevation leaves the app and download available.
+The cached installer is rechecked immediately before launch. An installed copy
+passes its existing install folder to Setup; a development copy uses normal
+Setup defaults. Setup independently checks running processes before replacement.
+
+No browser or GitHub sign-in is needed. Version 0.3.4 and earlier still use the
+browser flow and need one update to gain this feature. No silent or forced
+installation is performed. Settings and histories in installed app data persist.
 
 ## Current package
 
-The all-in-one release is 0.3.4, including ATS mod 1.1.5 and ETS2 mod 1.1.6.
+The current all-in-one build is 0.3.9, with ATS and ETS2 mods 1.2.1.
+It adds four-cargo-trailer support, Australian-style double/triple/quad layouts,
+correctly sized chain diagrams, and the ETS2 tanker selection repair. The driver
+confirmed the food-tanker Quad selects successfully after the repair. Other
+new combinations and driving remain under test. ETS2 shows the red advisory
+`over B-Double not recommended` above a B-double.
+It also includes in-app downloading/installation and cancellation improvements
+from local versions 0.3.5–0.3.8. Full live Convoy cancellation remains unverified.
 It includes full trailer loads, compatible automatic pickup-city selection,
-and branded ETS2 HCT freezer combinations with corrected hitch accessories.
+branded ETS2 HCT freezer combinations with corrected hitch accessories,
+and country-unlocked standard Double, B-Double and HCT definitions.
 The app, catalogs, both game plugins and both mod archives are bundled. Optional
 mod tasks install to the chosen game data folders, with verified backups.
 Mods must be enabled manually in each profile and remain after app uninstall.

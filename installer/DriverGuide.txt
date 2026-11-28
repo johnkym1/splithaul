@@ -34,8 +34,14 @@ mode; choose Dual or Multi-drop in Options for more deliveries. Attach your
 owned combination and enter Drive. Dispatch while stopped.
 Keep the companion open during a delivery plan.
 Shift+F9 opens or focuses the companion. Do not use sdk reload for normal use.
-Cancellation requires a stopped truck and the game pause menu.
-After delivery, review the result and acknowledge completion.
+Cancel becomes available as soon as a dispatch is pending or a job is active.
+If the game is not ready, clicking Cancel explains what is needed. Cancellation
+requires a stopped truck, the game menu and your confirmation. In Convoy,
+the updated plugin checks the visible main menu even while the multiplayer
+simulation keeps running. Press Esc before switching back to SplitHaul.
+After delivery, review the result and acknowledge completion. A cancellation
+made inside the game instead shows Acknowledge cancellation and remains
+Cancelled in history. Acknowledging only clears the app form.
 History can be exported with Export CSV and the Save As dialog.
 
 HOW TO USE IT IN GAME - SHIFT + F9
@@ -105,10 +111,15 @@ mod folder, in <game data folder>\mod-backups\DispatchCompanion.
 
 UPDATES
 In Options, press Check for updates. This includes published test releases.
-If a newer version is available, the app offers to open its GitHub release page.
-Download the installer, then close SplitHaul and both games normally
-before running Setup. Existing app profiles, settings and history are retained.
-Update checks are manual; nothing is downloaded or installed automatically.
+If a newer version is available, press Download update in the app. Progress
+is shown and you can cancel or retry. SplitHaul checks the installer size and
+SHA-256 against both the GitHub release and its checksum file.
+Close both games normally, then press Install update. Confirm to close
+SplitHaul and start Setup; approve the Windows permission prompt if shown.
+Setup keeps its normal plugin/mod choices and preserves existing installed
+app settings and history. No browser is needed. A development-folder copy
+starts a normal Setup installation; it does not import development data.
+You choose when to check, download and install; games are never force-closed.
 
 SUPPORT AND DONATIONS
 GitHub: https://github.com/johnkym1

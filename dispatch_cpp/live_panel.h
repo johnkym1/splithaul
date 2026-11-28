@@ -9,6 +9,7 @@
 class LivePanel {
 public:
     static constexpr int DispatchId=500;
+    static constexpr int RoadTrainWarningId=415;
     static constexpr UINT RestartReviewMessage=WM_APP+74;
     static constexpr UINT ProfileTitleMessage=WM_APP+89;
     LivePanel(HWND parent,HINSTANCE instance,const std::filesystem::path& project);
@@ -33,7 +34,7 @@ private:
     std::array<HWND,7> labels{},combos{};
     std::array<std::vector<ats::Choice>,7> options;
     std::array<std::string,7> selected{};
-    HWND trailerText=nullptr,help=nullptr,dispatchButton=nullptr,acknowledgeButton=nullptr,cancelButton=nullptr,cancelTooltip=nullptr,statusText=nullptr,jobText=nullptr;
+    HWND trailerText=nullptr,roadTrainWarning=nullptr,help=nullptr,dispatchButton=nullptr,acknowledgeButton=nullptr,cancelButton=nullptr,cancelTooltip=nullptr,statusText=nullptr,jobText=nullptr;
     HWND percentLabel=nullptr,percentEdit=nullptr,percentSpin=nullptr;
     HWND stopCountCombo=nullptr,stopEditorCombo=nullptr,selectionCombo=nullptr,generateButton=nullptr;
     HWND distanceLabel=nullptr,distanceEdit=nullptr,roundTripCheck=nullptr;

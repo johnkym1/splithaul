@@ -78,8 +78,29 @@ int main() {
         require(testCancelCalls==2&&live::readJson(folder/"cancel_results"/(request.id+".json")).at("outcome")=="game_unavailable","Multiple game jobs invoked an ambiguous cancellation");
         request.id=live::uniqueId();put(player,0x30,uintptr_t(0));put(jobUnit,0x1a0,uintptr_t(123));request.target=cancellationTarget(objects.player);live::writeJson(folder/"cancel_request.json",live::cancelRequestJson(request),false);pollCancel();
         require(testCancelCalls==2&&live::readJson(folder/"cancel_results"/(request.id+".json")).at("outcome")=="game_unavailable","External job invoked an unverified cancellation");
-        request.id=live::uniqueId();put(jobUnit,0x1a0,static_cast<uintptr_t>(-1));testCancelSucceeds=false;live::writeJson(folder/"cancel_request.json",live::cancelRequestJson(request),false);pollCancel();
-        require(testCancelCalls==3&&disabled&&live::readJson(folder/"cancel_results"/(request.id+".json")).at("outcome")=="game_unconfirmed","Failed native call was treated as confirmed");
+        // Convoy keeps SDK driving=true in the menu. Exercise the real bounded
+        // menu reader and cancellation handler against simulated native memory.
+        put(jobUnit,0x1a0,static_cast<uintptr_t>(-1));
+        std::vector<unsigned char> desktopScreen(0x100),desktopName={'d','e','s','k','t','o','p',0};
+        put(other,0,imageBase+desktopVtableRva);put(other,8,uint32_t(0x80000000));put(other,0xe0,ptr(desktopScreen));
+        put(desktopScreen,8,uint32_t(0x80000000));put(desktopScreen,0xa0,ptr(desktopName));put(desktopScreen,0x60,uint32_t(0x10000000));
+        memcpy(image.data()+desktopVisibilityRva,desktopVisibilityCode,sizeof(desktopVisibilityCode));
+        driving=true;menuSnapshot.beginDriving();lastSpeed=lastIgnition=GetTickCount64();speed=0;ignitionOn=true;
+        require(nativeDesktopMenuOpen()&&cancellationMenu().stopped()&&cancellationMenu().ignitionKnown,"Convoy menu was rejected because SDK reports driving");
+        speed=2;reject("rejected_state","Moving Convoy truck invoked cancellation");speed=0;
+        lastSpeed=GetTickCount64()-3000;reject("rejected_state","Stale Convoy speed invoked cancellation");lastSpeed=GetTickCount64();
+        lastIgnition=0;reject("rejected_state","Missing Convoy ignition invoked cancellation");lastIgnition=GetTickCount64();
+        for(uint32_t flags:{0u,0x20000000u,0x30000000u}){put(desktopScreen,0x60,flags);require(!nativeDesktopMenuOpen(),"Hidden or transitional menu accepted");reject("rejected_state","Non-visible Convoy menu invoked cancellation");}
+        put(desktopScreen,0x60,uint32_t(0x10000000));desktopName[0]='x';reject("rejected_state","Other screen accepted as desktop");desktopName[0]='d';
+        put(other,0,uintptr_t(0));reject("rejected_state","Wrong desktop type invoked cancellation");put(other,0,imageBase+desktopVtableRva);
+        image[desktopVisibilityRva]=0;reject("rejected_state","Modified menu code invoked cancellation");image[desktopVisibilityRva]=desktopVisibilityCode[0];
+        activeHostHash="unknown";reject("rejected_state","Unknown menu layout invoked cancellation");activeHostHash=pinnedHash;
+        lastSpeed=lastIgnition=GetTickCount64();request.id=live::uniqueId();live::writeJson(folder/"cancel_request.json",live::cancelRequestJson(request),false);pollCancel();
+        require(testCancelCalls==3&&live::readJson(folder/"cancel_results"/(request.id+".json")).at("outcome")=="game_confirmed","Stationary Convoy menu did not reach the native cancellation stub");
+        driving=false;
+        menuSnapshot.pause(10000,9999,0,9999,false);
+        request.id=live::uniqueId();testCancelSucceeds=false;live::writeJson(folder/"cancel_request.json",live::cancelRequestJson(request),false);pollCancel();
+        require(testCancelCalls==4&&disabled&&live::readJson(folder/"cancel_results"/(request.id+".json")).at("outcome")=="game_unconfirmed","Failed native call was treated as confirmed");
         std::cout<<"PASS: "<<dispatchGame::id<<" isolated cancellation checks: host/code pinning, cross-game rejection, queue, plan, replay, context, profile, menu, thread, session, expiry, no-job and failure; native call stubbed.\n";return 0;
     }catch(const std::exception& ex){std::cerr<<ex.what()<<"\n";return 1;}
 }

@@ -92,4 +92,10 @@ try {
     Copy-Item -LiteralPath (Join-Path $payload 'package-manifest.json') -Destination (Join-Path $projectRoot ('dist\SplitHaul-'+$version+'-manifest.json'))
     Write-Output ('Installer: '+$setup)
     Write-Output ('SHA-256: '+$setupHash)
+    # Keep the user's transfer folder on the same verified release set.
+    $localReleaseCopy=Join-Path $projectRoot 'tools\project_backup.py'
+    if(Test-Path -LiteralPath $localReleaseCopy){
+        & python $localReleaseCopy
+        if($LASTEXITCODE -ne 0){throw 'Installer built, but copying the release to M:\Grumpyman Trucking failed. Run tools\project_backup.py again when the drive is available.'}
+    }
 }finally{Pop-Location}

@@ -34,6 +34,7 @@ static bool disabled=false,nativeFault=false;
 #include "native_trailers.h"
 #ifdef GT_ENABLE_EXPERIMENTAL_CANCELLATION
 #include "cancellation_build.h"
+#include "native_menu.h"
 #endif
 #include "native_capacity.h"
 #include "app_hotkey.h"
@@ -72,6 +73,12 @@ static ULONGLONG lastAutoOpenCheck=0;
 static std::string pendingCancelId;
 static bool observedCancelEvent=false;
 static ULONGLONG pendingCancelDeadline=0;
+static live::MenuSnapshot cancellationMenu() {
+    if(!driving)return menuSnapshot;
+    live::MenuSnapshot snapshot;
+    if(nativeDesktopMenuOpen())snapshot.pause(GetTickCount64(),lastSpeed,speed,lastIgnition,ignitionOn);
+    return snapshot;
+}
 #ifdef GT_CANCELLATION_TEST
 static unsigned testCancelCalls=0;
 static bool testCancelSucceeds=true;
@@ -216,6 +223,8 @@ static void publish() {
     value["menu_snapshot"]={{"captured",menuSnapshot.captured},{"speed_mps",menuSnapshot.speedKnown?Json(menuSnapshot.speedMps):Json(nullptr)},{"stopped",menuSnapshot.stopped()},{"ignition_on",menuSnapshot.ignitionKnown?Json(menuSnapshot.ignitionOn):Json(nullptr)}};
 #ifdef GT_ENABLE_EXPERIMENTAL_CANCELLATION
     value["experimental_cancel_available"]=!disabled&&!nativeFault&&cancellationCodeMatches();
+    const auto cancelMenu=cancellationMenu();
+    value["cancel_menu_snapshot"]={{"captured",cancelMenu.captured},{"speed_mps",cancelMenu.speedKnown?Json(cancelMenu.speedMps):Json(nullptr)},{"stopped",cancelMenu.stopped()},{"ignition_on",cancelMenu.ignitionKnown?Json(cancelMenu.ignitionOn):Json(nullptr)}};
     value["cancel_target_token"]=world?cancellationTarget(o.player):std::string();
     value["car_job_active"]=carSeen&&carActive;value["bus_job_active"]=busSeen&&busActive;
 #endif
@@ -428,7 +437,8 @@ static void pollCancel() {
     const auto claimed=folder/"cancel_claims"/(req.id+".json");
     if(!MoveFileExW(file.c_str(),claimed.c_str(),MOVEFILE_WRITE_THROUGH)){if(fs::exists(claimed)){const auto duplicate=folder/"duplicates"/(live::uniqueId()+".duplicate-cancel.json");MoveFileExW(file.c_str(),duplicate.c_str(),MOVEFILE_WRITE_THROUGH);}return;}
     Objects confirmed;
-    if(!live::currentCancelRequest(req,session,live::utcMs())||driving||!menuSnapshot.stopped()||!menuSnapshot.ignitionKnown||callbackThread!=GetCurrentThreadId()||!cancellationProfileMatches(req.profileId)||!basicObjects(confirmed)||context(confirmed)!=req.context||cancellationTarget(confirmed.player)!=req.target) {cancelReply(req.id,"rejected_state");return;}
+    const auto cancelMenu=cancellationMenu();
+    if(!live::currentCancelRequest(req,session,live::utcMs())||!cancelMenu.stopped()||!cancelMenu.ignitionKnown||callbackThread!=GetCurrentThreadId()||!cancellationProfileMatches(req.profileId)||!basicObjects(confirmed)||context(confirmed)!=req.context||cancellationTarget(confirmed.player)!=req.target) {cancelReply(req.id,"rejected_state");return;}
     try {
     // Stop the queue on the SDK thread before considering a native call. A
     // claimed request can never be retried by the normal dispatch path.

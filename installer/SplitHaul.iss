@@ -37,8 +37,8 @@ UsePreviousGroup=no
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 Name: "atsplugin"; Description: "Install GT_Telemetry.dll for American Truck Simulator"
 Name: "etsplugin"; Description: "Install GT_Telemetry.dll for Euro Truck Simulator 2"
-Name: "atsmod"; Description: "Install GT multi-trailer mod for ATS (doubles and triples)"
-Name: "etsmod"; Description: "Install GT multi-trailer mod for ETS2 (doubles)"
+Name: "atsmod"; Description: "Install GT multi-trailer mod for ATS (doubles, triples and quads)"
+Name: "etsmod"; Description: "Install GT multi-trailer mod for ETS2 (doubles, triples and quads)"
 
 [Files]
 Source: "build\payload\SplitHaul.exe"; DestDir: "{app}"; Flags: ignoreversion; BeforeInstall: BackupApplication

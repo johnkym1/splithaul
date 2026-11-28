@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.9 — Australian road trains, test pre-release, 28 November 2026
+
+- Accept up to four cargo trailers in ATS and ETS2, excluding recognised dollies.
+- Add Australian-style double/triple/quad combinations and an ETS2 red advisory
+  above B-double. Keep the normal dealer and existing mod filenames.
+- Bundle both mods at 1.2.1 with correctly sized chain diagrams and repaired
+  ETS2 tanker lead accessory/body defaults. Food-tanker Quad selection was
+  confirmed by the driver after the repair; other live testing continues.
+- Include in-app update download/verification/installation, cancellation controls
+  after dispatch, cancelled-versus-completed status and Convoy menu detection
+  from local builds 0.3.5–0.3.8. Full live Convoy cancellation remains unverified.
+
 ## 0.3.4 — Full loads and ETS2 HCT updates, test pre-release, 26 November 2026
 
 - Add per-profile Full trailer loads for new jobs, bounded by trailer payload

@@ -85,6 +85,7 @@ LivePanel::LivePanel(HWND h,HINSTANCE app,const std::filesystem::path& root):par
     loadTripPreferences();
     refreshDropEditor();
     trailerText=CreateWindowW(L"STATIC",L"",WS_CHILD,0,0,0,0,parent,nullptr,instance,nullptr);help=CreateWindowW(L"STATIC",L"",WS_CHILD,0,0,0,0,parent,nullptr,instance,nullptr);
+    roadTrainWarning=CreateWindowW(L"STATIC",L"",WS_CHILD,0,0,0,0,parent,reinterpret_cast<HMENU>(static_cast<INT_PTR>(RoadTrainWarningId)),instance,nullptr);
     dispatchButton=CreateWindowW(L"BUTTON",L"Dispatch job to the game",WS_CHILD|WS_TABSTOP|BS_DEFPUSHBUTTON,0,0,0,0,parent,reinterpret_cast<HMENU>(static_cast<INT_PTR>(DispatchId)),instance,nullptr);
     acknowledgeButton=CreateWindowW(L"BUTTON",L"Acknowledge completion",WS_CHILD|WS_TABSTOP,0,0,0,0,parent,reinterpret_cast<HMENU>(502),instance,nullptr);
     cancelButton=CreateWindowW(L"BUTTON",L"Cancel current job",WS_CHILD|WS_TABSTOP,0,0,0,0,parent,reinterpret_cast<HMENU>(503),instance,nullptr);
@@ -194,7 +195,7 @@ void LivePanel::setRandom(bool value) {
     if(value&&twoStop&&!multiDrop&&online&&!body.empty()&&(lastId.empty()||formClearedId==lastId)&&!shouldWarnOnClose()&&!ats::awaitingAcknowledgement(savedPlan,lastId,lastSession,formClearedId,plan,result)&&!ats::canConfirmUnrecordedCompletion(savedPlan,lastId,lastSession,formClearedId,plan,result,status,live::utcMs())){selected[3].clear();selected[4].clear();}
     choices();render();
 }
-void LivePanel::show(bool value) {visible=value;for(size_t i=0;i<7;++i){ShowWindow(labels[i],value&&(i<5||twoStop)&&!(multiDrop&&i==3)?SW_SHOW:SW_HIDE);ShowWindow(combos[i],value&&(i<5||twoStop)?SW_SHOW:SW_HIDE);}ShowWindow(percentLabel,value&&twoStop?SW_SHOW:SW_HIDE);for(auto h:{percentEdit,percentSpin})ShowWindow(h,value&&twoStop&&!multiDrop?SW_SHOW:SW_HIDE);for(auto h:{stopCountCombo,stopEditorCombo,selectionCombo,generateButton,distanceLabel,distanceEdit,roundTripCheck})ShowWindow(h,value&&multiDrop?SW_SHOW:SW_HIDE);for(auto h:{trailerText,help,dispatchButton,acknowledgeButton,cancelButton,statusText,jobText})ShowWindow(h,value?SW_SHOW:SW_HIDE);if(!value&&cancelTooltip)SendMessageW(cancelTooltip,TTM_ACTIVATE,FALSE,0);if(value)tick();}
+void LivePanel::show(bool value) {visible=value;for(size_t i=0;i<7;++i){ShowWindow(labels[i],value&&(i<5||twoStop)&&!(multiDrop&&i==3)?SW_SHOW:SW_HIDE);ShowWindow(combos[i],value&&(i<5||twoStop)?SW_SHOW:SW_HIDE);}ShowWindow(percentLabel,value&&twoStop?SW_SHOW:SW_HIDE);for(auto h:{percentEdit,percentSpin})ShowWindow(h,value&&twoStop&&!multiDrop?SW_SHOW:SW_HIDE);for(auto h:{stopCountCombo,stopEditorCombo,selectionCombo,generateButton,distanceLabel,distanceEdit,roundTripCheck})ShowWindow(h,value&&multiDrop?SW_SHOW:SW_HIDE);for(auto h:{trailerText,roadTrainWarning,help,dispatchButton,acknowledgeButton,cancelButton,statusText,jobText})ShowWindow(h,value?SW_SHOW:SW_HIDE);if(!value&&cancelTooltip)SendMessageW(cancelTooltip,TTM_ACTIVATE,FALSE,0);if(value)tick();}
 void LivePanel::layout(int width,int height,UINT dpi) {
     const DispatchLayout page(true,twoStop,height,multiDrop);
     auto place=[dpi](HWND h,int x,int y,int w,int hgt){MoveWindow(h,MulDiv(x,static_cast<int>(dpi),96),MulDiv(y,static_cast<int>(dpi),96),MulDiv(w,static_cast<int>(dpi),96),MulDiv(hgt,static_cast<int>(dpi),96),TRUE);};
@@ -203,7 +204,7 @@ void LivePanel::layout(int width,int height,UINT dpi) {
     place(stopEditorCombo,44,DispatchLayout::fieldTop(5),200,280);
     place(stopCountCombo,266,DispatchLayout::fieldTop(7),54,220);place(selectionCombo,330,DispatchLayout::fieldTop(7),120,150);place(generateButton,460,DispatchLayout::fieldTop(7),(std::min)(226,width-504),28);
     place(distanceLabel,44,DispatchLayout::fieldTop(8)+4,216,26);place(distanceEdit,266,DispatchLayout::fieldTop(8),88,28);place(roundTripCheck,370,DispatchLayout::fieldTop(8),316,28);
-    place(trailerText,44,page.guidanceTop+40,width-88,80);place(help,44,page.guidanceTop+124,width-88,40);
+    place(trailerText,44,page.guidanceTop+40,width-88,80);place(roadTrainWarning,44,page.guidanceTop+124,width-88,22);place(help,44,page.guidanceTop+148,width-88,40);
     const int buttonWidth=(width-112)/3;
     place(dispatchButton,44,page.actionsTop+38,buttonWidth,36);place(acknowledgeButton,56+buttonWidth,page.actionsTop+38,buttonWidth,36);place(cancelButton,68+buttonWidth*2,page.actionsTop+38,buttonWidth,36);
     const int column=(width-64)/2;
@@ -277,9 +278,14 @@ void LivePanel::render() {
     EnableWindow(generateButton,attached&&!pending&&!needsAcknowledgement&&catalog&&catalog->valid(finalRoute(),body)&&SendMessageW(selectionCombo,CB_GETCURSEL,0,0)==0);
     EnableWindow(dispatchButton,attached&&pendingCancelId.empty()&&status.value("can_queue",false)&&!pending&&!needsAcknowledgement&&valid);
     EnableWindow(acknowledgeButton,needsAcknowledgement);
-    const auto cancelReason=ats::cancelUnavailableReason(online,!profileData.empty(),!pendingCancelId.empty(),status,!lastId.empty()&&lastId!=formClearedId);
-    EnableWindow(cancelButton,cancelReason.empty());
+    text(acknowledgeButton,awaiting&&resultState=="cancelled"?"Acknowledge cancellation":review?"Review job outcome":"Acknowledge completion");
+    const bool pendingDispatch=!lastId.empty()&&!formClean&&!awaiting&&(!live::terminal(resultState)||planActive);
+    const auto cancelReason=ats::cancelUnavailableReason(online,!profileData.empty(),!pendingCancelId.empty(),status,pendingDispatch);
+    EnableWindow(cancelButton,ats::cancelActionAvailable(online,!profileData.empty(),!pendingCancelId.empty(),status,pendingDispatch));
     if(cancelTooltip){cancelTooltipText=wide(cancelReason);TOOLINFOW tool={};tool.cbSize=sizeof(tool);tool.hwnd=parent;tool.uId=503;tool.lpszText=cancelTooltipText.empty()?const_cast<wchar_t*>(L""):cancelTooltipText.data();SendMessageW(cancelTooltip,TTM_UPDATETIPTEXTW,0,reinterpret_cast<LPARAM>(&tool));SendMessageW(cancelTooltip,TTM_ACTIVATE,visible&&!cancelReason.empty(),0);}
+    const bool roadTrainNotice=online&&live::overBDoubleWarning(t);
+    text(roadTrainWarning,roadTrainNotice?"over B-Double not recommended":"");
+    ShowWindow(roadTrainWarning,visible&&roadTrainNotice?SW_SHOW:SW_HIDE);
     if(!catalogError.empty())text(trailerText,catalogError);
     else if(!online)text(trailerText,"Trailer information will appear when ATS is connected.");
     else if(!attached)text(trailerText,t.value("connected",false)?live::trailerSupportMessage(t):"Attach an owned combination of 1-"+std::to_string(live::trailerLimit())+" trailers. Recognised dollies are excluded.");
@@ -297,13 +303,13 @@ void LivePanel::render() {
     text(help,multiDrop?"Choose pickup and final destination, then Generate stops or select each delivery manually.\r\nEven cargo split; all trailers stay attached. Final destination counts as one stop.":twoStop?(randomMiddle?"Choose Final delivery. A compatible first city and company are picked randomly.\r\nFirst leg: maximum load. Final leg: selected percentage. Shift+F9 opens Dispatch.":"Choose either delivery city first. First delivery follows the route to Final.\r\nFirst leg: maximum load. Final leg: selected percentage. Shift+F9 opens Dispatch."):"Compatible cargo only. Jobs use the maximum whole-unit load.\r\nShift+F9 opens SplitHaul from ATS.");
     std::string message;
     if(!sendError.empty())message=sendError;
-    else if(awaiting)message=(resultState=="cancelled"?"Job cancelled.":savedPlan?"All deliveries completed successfully.":"Delivery completed successfully.")+std::string("\r\nAcknowledge completion to clear this form and choose a new job.");
-    else if(review)message="ATS has no active job. The previous session has no delivery receipt.\r\nUse Acknowledge completion if you have verified that delivery finished.";
+    else if(awaiting)message=resultState=="cancelled"?"Job cancelled.\r\nAcknowledge cancellation to clear this form and choose a new job.":(savedPlan?"All deliveries completed successfully.":"Delivery completed successfully.")+std::string("\r\nAcknowledge completion to clear this form and choose a new job.");
+    else if(review)message="ATS has no active job. The previous session has no delivery receipt.\r\nUse Review job outcome to check what happened.";
     else if(!online&&gameClosed)message="ATS has closed. Your dispatch details are retained.\r\nAfter reopening ATS, load your profile and bring this app forward to review the delivery.";
     else if(!online)message=offlineReason.empty()?"Start ATS and load your single-player test profile. The live dispatcher must be installed.":offlineReason;
     else if(!lastId.empty()&&!result.empty()&&!formClean&&currentSession)message=result.value("message",std::string())+"\r\nDispatch status: "+resultState;
     else if(!lastId.empty()&&!formClean&&!currentSession&&status.value("resumed_monitoring",false)&&status.value("last_request_id",std::string())==lastId)message="Tracking resumed for your active job after the ATS restart.\r\nDeliver normally; the result will be recorded.";
-    else if(!lastId.empty()&&!formClean&&!currentSession)message="Previous-session dispatch retained. Return to Drive to check its status.\r\nAcknowledge completion becomes available when ATS reports no active job.";
+    else if(!lastId.empty()&&!formClean&&!currentSession)message="Previous-session dispatch retained. Return to Drive to check its status.\r\nReview job outcome becomes available when ATS reports no active job.";
     else if(pending)message="Request submitted. Return to the ATS driving view with the truck stopped and trailer attached.";
     else if(!lastId.empty()&&receiptExpired&&currentSession)message="No result was received before the request expired. Check the active job in ATS before sending another dispatch.";
     else if(status.value("disabled",false))message="Live dispatch stopped after an uncertain result. Check the game before restarting the session.";
@@ -381,11 +387,13 @@ void LivePanel::syncHistory() {
 void LivePanel::requestCancel() {
     if(profileData.empty()||!pendingCancelId.empty())throw std::runtime_error("No profile is ready for cancellation.");
     const auto confirmedProfile=displayedProfile;const auto confirmedDir=profileData;
-    auto fresh=bridgeStatus(bridge);const auto menu=fresh.at("menu_snapshot");
-    if(!fresh.value("experimental_cancel_available",false)||fresh.at("driving").get<bool>()||!menu.at("stopped").get<bool>()||!menu.at("ignition_on").is_boolean()||currentProfile(fresh)!=displayedProfile)throw std::runtime_error("Stop the truck and open the ATS menu before cancelling.");
+    auto fresh=bridgeStatus(bridge);
+    const auto unavailable=ats::cancelUnavailableReason(true,true,false,fresh,!lastId.empty()&&lastId!=formClearedId);
+    if(!unavailable.empty())throw std::runtime_error(unavailable);
+    if(currentProfile(fresh)!=displayedProfile)throw std::runtime_error("The active game profile changed. Wait for SplitHaul to reconnect before cancelling.");
     if(MessageBoxW(parent,L"This action will cancel any active job in the game. It will also stop any remaining stops. Completed deliveries remain in history. The game may charge a cancellation penalty. Cancellation is experimental; use a disposable test profile.\n\nContinue?",L"Cancel current job",MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2)!=IDYES)return;
-    const auto checked=bridgeStatus(bridge);const auto checkedMenu=checked.at("menu_snapshot");
-    if(displayedProfile!=confirmedProfile||profileData!=confirmedDir||!checked.value("experimental_cancel_available",false)||checked.at("session_id")!=fresh.at("session_id")||checked.at("context_id")!=fresh.at("context_id")||checked.at("cancel_target_token")!=fresh.at("cancel_target_token")||checked.at("driving").get<bool>()||!checkedMenu.at("stopped").get<bool>()||!checkedMenu.at("ignition_on").is_boolean()||currentProfile(checked)!=confirmedProfile)throw std::runtime_error("ATS state changed. Open the menu and try again.");
+    const auto checked=bridgeStatus(bridge);
+    if(displayedProfile!=confirmedProfile||profileData!=confirmedDir||!ats::cancelUnavailableReason(true,true,false,checked,!lastId.empty()&&lastId!=formClearedId).empty()||checked.at("session_id")!=fresh.at("session_id")||checked.at("context_id")!=fresh.at("context_id")||checked.at("cancel_target_token")!=fresh.at("cancel_target_token")||currentProfile(checked)!=confirmedProfile)throw std::runtime_error("ATS state changed. Open the menu and try again.");
     live::CancelRequest request;request.id=live::uniqueId();request.session=checked.at("session_id");request.context=checked.at("context_id");request.target=checked.at("cancel_target_token");request.profileId=ats::profileFolderId(confirmedProfile);request.created=live::utcMs();request.expires=request.created+30000;
     live::parseCancelRequest(live::cancelRequestJson(request));
     const auto pending=live::Json{{"request_id",request.id},{"session_id",request.session},{"dispatch_id",lastId},{"dispatch_session_id",lastSession},{"created_utc_ms",request.created}};
@@ -498,7 +506,7 @@ void LivePanel::reviewRestart() {
 void LivePanel::send() {
     if(!pendingCancelId.empty())throw std::runtime_error("Wait for the cancellation request to finish.");
     if(profileData.empty()||currentProfile(bridgeStatus(bridge))!=displayedProfile)throw std::runtime_error("ATS profile changed or could not be identified. Wait for it to load.");
-    if(ats::awaitingAcknowledgement(savedPlan,lastId,lastSession,formClearedId,plan,result)||ats::canConfirmUnrecordedCompletion(savedPlan,lastId,lastSession,formClearedId,plan,result,status,live::utcMs()))throw std::runtime_error("Acknowledge the previous delivery before starting another dispatch.");
+    if(ats::awaitingAcknowledgement(savedPlan,lastId,lastSession,formClearedId,plan,result)||ats::canConfirmUnrecordedCompletion(savedPlan,lastId,lastSession,formClearedId,plan,result,status,live::utcMs()))throw std::runtime_error("Acknowledge or review the previous job outcome before starting another dispatch.");
     if(!catalog)throw std::runtime_error(catalogError);
     const auto fresh=bridgeStatus(bridge);const auto t=fresh.at("trailer");const auto currentBody=t.value("body_type",std::string());
     catalog->loadedDlcs=ats::mountedDlcs(currentGameLog(fresh));

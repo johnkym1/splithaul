@@ -1,19 +1,38 @@
 GT Multi-Trailer Combinations - ETS2
 
+
+
 SplitHaul by grumpyman - website, downloads and updates:
+
 https://github.com/johnkym1/splithaul
 
+
+
 Use the normal trailer selection and Customize menus for combinations already provided by the game.
+
 This package adds only 4 dealer entries for combinations unavailable through the normal options.
+
 Extra doubles: fuel tanker, gas tanker and food tanker in chrome/paint.
 
+
+
 All existing GT trailer definitions, chassis and models remain for previously purchased combinations.
+
 Dollies are excluded from the cargo-trailer limit.
+
 New combinations require in-game testing.
+
 SCS Software assets; local additions by Grumpyman / Codex.
+
 
 Schmitz S.KO COOL: Customize > HCT > GT HCT for two full-length 13.6 m, three-axle freezers with a native two-axle Schmitz dolly. Schmitz DLC required. No country restriction on this added combination; standard game HCT definitions are unchanged. Purchase, coupling and driving still require in-game testing.
 
 New GT HCT freezer options: Tirsan SRI, Schwarzmuller Reefer, Kogel COOL and Krone Cool Liner. Two full-length three-axle freezers plus a stock two-axle dolly. Select the brand trailer, Customize > HCT > GT HCT. Matching brand DLC required. No country restrictions for these added combinations; no extra dealer cards. Custom lead couplings require in-game purchase, visual and driving tests.
 
 1.1.6 fixes cable accessory compatibility on the four branded GT HCT leads so their factory defaults, including the visible towing hitch, can load. Re-select the GT HCT configuration when testing. Visual confirmation is still required.
+
+1.1.7 removes garage-country restrictions from standard ETS2 and supported DLC Double, B-Double and HCT trailer definitions. DLC ownership is still required. Existing GT names, models, capacities and dealer cards are preserved. This is separate from the SplitHaul Full trailer loads option.
+
+Australian combinations: Customize > Chain type. Named A-double, B-triple, AB-triple, A-triple and quad choices where compatible chassis exist. Up to four cargo trailers; converter dollies excluded. Requires SplitHaul and game plugins with four-trailer support. Uses SCS trailer models; not exact Australian manufacturer replicas. New combinations require in-game purchase and driving tests.
+
+1.2.1: Native-size, shaded chain diagrams with visible dollies and B-link platforms. ETS2 tanker lead accessory compatibility and food-tanker end-cap defaults corrected after a configurator crash.

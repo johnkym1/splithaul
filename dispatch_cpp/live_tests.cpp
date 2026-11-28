@@ -50,6 +50,22 @@ int wmain(int argc,wchar_t** argv) {
         hintChanged=hintStatus;hintChanged["menu_snapshot"]["stopped"]=false;check(ats::cancelUnavailableReason(true,true,false,hintChanged,false).find("Stop")!=std::string::npos,"Moving-truck hint did not explain stopping");
         hintChanged=hintStatus;hintChanged["menu_snapshot"]["ignition_on"]=nullptr;check(ats::cancelUnavailableReason(true,true,false,hintChanged,false).find("Ignition")!=std::string::npos,"Unknown ignition did not get an explanation");
         check(ats::cancelUnavailableReason(false,true,false,hintStatus,false).find("Connect")!=std::string::npos,"Offline cancellation did not get an explanation");
+        auto waitingCancel=hintStatus;waitingCancel["driving"]=true;waitingCancel["job"]["active"]=false;waitingCancel.erase("menu_snapshot");
+        check(ats::cancelActionAvailable(true,true,false,waitingCancel,true),"Newly submitted dispatch did not enable Cancel immediately");
+        check(!ats::cancelUnavailableReason(true,true,false,waitingCancel,true).empty(),"Enabled button bypassed the safe menu requirement");
+        check(!ats::cancelActionAvailable(true,true,false,waitingCancel,false),"Empty job form enabled Cancel");
+        waitingCancel["job"]["active"]=true;check(ats::cancelActionAvailable(true,true,false,waitingCancel,false),"Active driving job hid the cancellation action");
+        check(!ats::cancelActionAvailable(true,true,true,waitingCancel,true),"Cancellation in flight allowed a duplicate request");
+        check(!ats::cancelActionAvailable(false,true,false,waitingCancel,true)&&!ats::cancelActionAvailable(true,false,false,waitingCancel,true),"Disconnected or unidentified profile allowed cancellation");
+        waitingCancel["experimental_cancel_available"]=false;check(!ats::cancelActionAvailable(true,true,false,waitingCancel,true),"Unsupported plugin exposed cancellation");
+        auto convoyCancel=hintStatus;convoyCancel["driving"]=true;
+        convoyCancel["cancel_menu_snapshot"]={{"captured",true},{"speed_mps",0.0},{"stopped",true},{"ignition_on",true}};
+        check(ats::cancelUnavailableReason(true,true,false,convoyCancel,true).empty(),"Convoy menu was blocked by SDK driving flag");
+        convoyCancel["cancel_menu_snapshot"]["captured"]=false;check(!ats::cancelUnavailableReason(true,true,false,convoyCancel,true).empty(),"Closed Convoy menu was accepted");
+        convoyCancel["cancel_menu_snapshot"]["captured"]=true;convoyCancel["cancel_menu_snapshot"]["stopped"]=false;check(!ats::cancelUnavailableReason(true,true,false,convoyCancel,true).empty(),"Moving Convoy cancellation was accepted");
+        convoyCancel["cancel_menu_snapshot"]["stopped"]=true;convoyCancel["cancel_menu_snapshot"]["speed_mps"]=nullptr;check(!ats::cancelUnavailableReason(true,true,false,convoyCancel,true).empty(),"Missing Convoy speed was accepted");
+        convoyCancel["cancel_menu_snapshot"]["speed_mps"]=0.0;convoyCancel["cancel_menu_snapshot"]["ignition_on"]=nullptr;check(!ats::cancelUnavailableReason(true,true,false,convoyCancel,true).empty(),"Missing Convoy ignition was accepted");
+        convoyCancel.erase("cancel_menu_snapshot");check(!ats::cancelUnavailableReason(true,true,false,convoyCancel,true).empty(),"Older plugin bypassed the pause requirement");
         if(argc!=3)throw std::runtime_error("Expected project and isolated test directory.");
         check(dispatchLauncher::shortcutModifiers==(MOD_SHIFT|MOD_NOREPEAT)&&dispatchLauncher::shortcutKey==VK_F9&&std::string(dispatchLauncher::shortcutLabel)=="Shift+F9","Shortcut chord and displayed label disagree");
         for(unsigned modifiers=0;modifiers<16;++modifiers){

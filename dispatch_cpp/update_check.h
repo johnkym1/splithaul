@@ -12,6 +12,7 @@
 #include <optional>
 #include <array>
 #include <cctype>
+#include <algorithm>
 #pragma comment(lib,"winhttp.lib")
 
 namespace updates {
@@ -28,7 +29,9 @@ inline std::optional<Version> version(std::string text){
     }return result;
 }
 enum class State {available,current,ahead,none,error};
-struct Result {State state=State::none;std::string latest,url,message;bool prerelease=false;};
+inline constexpr uint64_t maximumInstallerBytes=128*1024*1024;
+inline bool validDigest(const std::string& value){return value.size()==64&&std::all_of(value.begin(),value.end(),[](char c){return (c>='0'&&c<='9')||(c>='a'&&c<='f');});}
+struct Result {State state=State::none;std::string latest,url,message;bool prerelease=false;std::string installerUrl,checksumUrl,digest;uint64_t installerBytes=0;};
 inline Result evaluate(const dispatch::Json& releases,const std::string& installed,bool includeTests=includePrereleases){
     const auto current=version(installed);if(!current)throw std::runtime_error("The installed version could not be read.");
     if(!releases.is_array())throw std::runtime_error("GitHub returned an unreadable release list.");
@@ -38,11 +41,16 @@ inline Result evaluate(const dispatch::Json& releases,const std::string& install
         const bool test=release.value("prerelease",false);if(test&&!includeTests)continue;
         const auto tag=release.at("tag_name").get<std::string>();const auto parsed=version(tag);if(!parsed||tag!="v"+std::to_string((*parsed)[0])+"."+std::to_string((*parsed)[1])+"."+std::to_string((*parsed)[2]))continue;
         const auto number=tag.substr(1),url=release.at("html_url").get<std::string>();if(url!=std::string(releasePrefix)+tag)continue;
-        const auto installer="SplitHaul-Setup-"+number+"-win64.exe";bool exe=false,checksum=false;
+        const auto installer="SplitHaul-Setup-"+number+"-win64.exe";bool exe=false,checksum=false;Result candidate;
+        const auto download="https://github.com/johnkym1/splithaul/releases/download/"+tag+"/"+installer;
         if(!release.at("assets").is_array())continue;
-        for(const auto& asset:release["assets"])if(asset.value("state",std::string())=="uploaded"&&asset.value("size",uint64_t(0))>0){const auto name=asset.value("name",std::string());exe|=name==installer;checksum|=name==installer+".sha256";}
+        for(const auto& asset:release["assets"])if(asset.value("state",std::string())=="uploaded"&&asset.value("size",uint64_t(0))>0){
+            const auto name=asset.value("name",std::string()),assetUrl=asset.value("browser_download_url",std::string());
+            if(name==installer&&assetUrl==download){const auto digest=asset.value("digest",std::string());const auto bytes=asset.at("size").get<uint64_t>();if(digest.rfind("sha256:",0)==0&&validDigest(digest.substr(7))&&bytes<=maximumInstallerBytes){exe=true;candidate.installerUrl=assetUrl;candidate.digest=digest.substr(7);candidate.installerBytes=bytes;}}
+            if(name==installer+".sha256"&&assetUrl==download+".sha256"&&asset.at("size").get<uint64_t>()<=4096){checksum=true;candidate.checksumUrl=assetUrl;}
+        }
         if(!exe||!checksum||(highest&&*parsed<=*highest))continue;
-        highest=parsed;result.latest=number;result.url=url;result.prerelease=test;
+        highest=parsed;result=std::move(candidate);result.latest=number;result.url=url;result.prerelease=test;
     }catch(const dispatch::Json::exception&){continue;}
     if(highest)result.state=*highest>*current?State::available:*highest==*current?State::current:State::ahead;
     return result;

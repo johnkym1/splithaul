@@ -5,12 +5,12 @@ A Windows dispatch app for single-player **American Truck Simulator** and
 trailer combination, split the original cargo across deliveries, and keep an
 exportable job history.
 
-**[Download SplitHaul 0.3.4 for Windows](https://github.com/johnkym1/splithaul/releases/download/v0.3.4/SplitHaul-Setup-0.3.4-win64.exe)**
+**[Download SplitHaul 0.3.9 for Windows](https://github.com/johnkym1/splithaul/releases/download/v0.3.9/SplitHaul-Setup-0.3.9-win64.exe)**
 
-[Release notes and SHA-256 checksum](https://github.com/johnkym1/splithaul/releases/tag/v0.3.4)
+[Release notes and SHA-256 checksum](https://github.com/johnkym1/splithaul/releases/tag/v0.3.9)
 
 This is an unsigned test pre-release. Setup bundles the app, both game plugins,
-ATS trailer mod 1.1.5 and ETS2 trailer mod 1.1.6. The green **Code** button
+ATS and ETS2 trailer mods 1.2.1. The green **Code** button
 downloads source code; use the installer link to install the app.
 
 ## Upgrading from Dispatch Companion
@@ -33,8 +33,7 @@ filenames and Mod Manager names stay compatible with purchased trailers.
    Steam game folders for plugins and Documents game folders for mods.
 2. Open **SplitHaul** once from the Start menu.
 3. Start ATS or ETS2 in single player, enable the chosen GT trailer mod if
-   needed, and attach an owned combination: **1–3 cargo trailers in ATS**, or
-   **1–2 in ETS2**. Recognised dollies are excluded from that count.
+   needed, and attach an owned combination: **1–4 cargo trailers in ATS or ETS2**. Recognised dollies are excluded from that count.
 4. Enter Drive and stop. **Hold Shift and tap F9** to open or focus SplitHaul.
 5. Choose **Single**, **Dual** or **Multi-drop** in Options. ATS modes are grouped
    together, followed by ETS2 modes.
@@ -86,12 +85,25 @@ unlock its cities. Mod-map cities are not imported automatically.
 The optional archives are `GT_Tanker_Combinations_ATS.scs` and
 `GT_Tanker_Combinations_ETS2.scs`. Keep the existing **GT Multi-Trailer
 Combinations - ATS/ETS2** Mod Manager entries enabled rather than adding duplicates.
-ATS includes long triples and three-axle road trains for curtainsiders, fuel
-and reefers, using two-axle dollies. ETS2 includes fuel, gas and food tanker doubles,
-plus HCT freezer combinations for Schmitz, Tirsan, Schwarzmuller, Kogel and Krone
-through normal Customize options. Each brand requires its matching DLC.
-The four newer brand hitch accessory definitions are corrected in ETS2 mod 1.1.6;
-visual alignment and driving need further in-game testing.
+Both mods include Australian-style doubles, triples and quads through the normal
+**Customize > Chain type** menu, where supported by the trailer family.
+Freezers, curtainsiders, tippers, livestock, logging, flatbeds and compatible
+tankers are included. Matching DLC remains required for branded trailers.
+Dollies retain their existing axle arrangements; these are not exact Australian
+manufacturer models. ETS2 displays the red advisory **over B-Double not recommended**
+for combinations above a B-double. Selection diagrams are correctly sized in 1.2.1,
+and tanker accessory defaults and compatibility are repaired. The driver has
+confirmed the ETS2 food-tanker Quad now selects successfully; other combinations,
+purchasing, driving and Australian replacement maps still need further testing.
+
+## In-app updates and cancellation
+
+SplitHaul 0.3.5 and later can download, verify and launch an update installer from
+**Options > Check for updates**. Version 0.3.4 and earlier use the browser for
+this first update. Close both games before installing updated plugins or mods.
+Cancellation controls appear after dispatch, distinguish cancelled jobs from
+completed jobs, and use stopped/menu checks before changing a live game job.
+Convoy menu detection was updated; full live Convoy cancellation remains unverified.
 
 Setup backs up replaced plugins and mods. Mods remain on app uninstall because
 purchased trailers may depend on them. See the [driver guide](installer/DriverGuide.txt)

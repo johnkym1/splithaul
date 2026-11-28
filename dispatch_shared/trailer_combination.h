@@ -3,7 +3,7 @@
 #include <vector>
 
 namespace live {
-inline unsigned trailerLimit(){return dispatchGame::isETS2()?2u:3u;}
+inline unsigned trailerLimit(){return 4u;}
 struct TrailerPart {
     std::string chassis,body;
     bool dolly=false;
@@ -33,6 +33,13 @@ inline bool supportedTrailer(const Json& trailer) {
 }
 inline std::string trailerSupportMessage(const Json& trailer) {
     if(!trailer.value("combination_known",false))return "Trailer combination is not verified. Attach owned trailers and use the matching updated game plugin.";
-    return "This combination has "+std::to_string(trailer.value("trailer_count",0u))+" trailers. "+(dispatchGame::isETS2()?"ETS2 supports 1-2":"ATS supports 1-3")+" trailers, excluding recognised dollies.";
+    return "This combination has "+std::to_string(trailer.value("trailer_count",0u))+" trailers. SplitHaul supports 1-4 trailers, excluding recognised dollies.";
+}
+inline bool overBDoubleWarning(const Json& trailer) {
+    if(!dispatchGame::isETS2()||!trailer.is_object()||!trailer.value("connected",false)||!trailer.value("combination_known",false))return false;
+    const auto count=trailer.value("trailer_count",0u);
+    // HCT/A-double has two cargo trailers plus a converter dolly. Physical
+    // counts also catch road trains whose mod labels them as a single.
+    return count>2||(count==2&&(trailer.value("dolly_count",0u)>0||trailer.value("chain_type",std::string())=="hct"));
 }
 }
